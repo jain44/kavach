@@ -1,11 +1,11 @@
 """
-Kavach -- Database Seed Script
-Reads existing CSV files and inserts all data into PostgreSQL.
+Kavach -- Database Seed & Hardening Script
+Reads existing CSV files and inserts all data into PostgreSQL/SQLite using high-performance bulk upserts.
 
 Run once after creating the database schema:
     python -m db.seed
 
-This script is idempotent: re-running it will skip rows that already exist.
+This script is fully idempotent: re-running it will update existing rows.
 """
 
 import json
@@ -27,16 +27,13 @@ import bcrypt
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
-from db.database import engine, SessionLocal
+from db.database import engine, SessionLocal, bulk_upsert
 from db.models import (
     Base, User, BorrowerProfile, Prediction,
-    Explanation, MonthlySnapshot, AuditLog, AlertRecord
+    Explanation, MonthlySnapshot, AuditLog, AlertRecord, ModelVersion
 )
-
-BATCH_SIZE = 500   # Rows inserted per transaction batch
-
+from db.crypto import encrypt_val
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,37 +57,10 @@ def _safe_float(val, default=0.0) -> float:
         return default
 
 
-def _batch_insert(db: Session, objects: list, label: str):
-    """Insert objects in batches, skipping duplicates via IntegrityError."""
-    inserted = 0
-    skipped  = 0
-    for i in range(0, len(objects), BATCH_SIZE):
-        batch = objects[i : i + BATCH_SIZE]
-        try:
-            db.bulk_save_objects(batch)
-            db.commit()
-            inserted += len(batch)
-        except IntegrityError:
-            db.rollback()
-            # Fall back to individual inserts to skip only duplicates
-            for obj in batch:
-                try:
-                    db.add(obj)
-                    db.commit()
-                    inserted += 1
-                except IntegrityError:
-                    db.rollback()
-                    skipped += 1
-        if (i // BATCH_SIZE) % 10 == 0:
-            print(f"    {label}: {inserted:,} inserted, {skipped:,} skipped ...", end="\r")
-    print(f"    {label}: {inserted:,} inserted, {skipped:,} skipped.    ")
-    return inserted
-
-
 # ─── Seed Functions ───────────────────────────────────────────────────────────
 
 def seed_users(db: Session):
-    print("\n[1/7] Seeding users...")
+    print("\n[1/8] Seeding users...")
     demo_users = [
         ("risk_officer", "Priya Sharma",    "risk_officer", "kavach123"),
         ("rm",           "Arjun Mehta",     "rm",           "kavach123"),
@@ -98,146 +68,182 @@ def seed_users(db: Session):
         ("compliance",   "Anjali Iyer",     "compliance",   "kavach123"),
         ("admin",        "System Admin",    "admin",        "kavach123"),
     ]
-    created = 0
+    
+    users_list = []
     for username, name, role, password in demo_users:
-        exists = db.query(User).filter_by(username=username).first()
-        if not exists:
-            db.add(User(
-                username=username,
-                name=name,
-                role=role,
-                password_hash=_hash(password),
-                is_active=True,
-            ))
-            created += 1
-    db.commit()
-    print(f"    Users: {created} created, {len(demo_users) - created} already exist.")
+        users_list.append({
+            "username": username,
+            "name": name,
+            "role": role,
+            "password_hash": _hash(password),
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        })
+    
+    upserted = bulk_upsert(db, User, users_list, ["username"])
+    print(f"    Users: {upserted} records seeded/updated.")
+
+
+def seed_model_versions(db: Session):
+    print("\n[2/8] Seeding active model version...")
+    metrics_snapshot = {
+        "model_version": "v1.0.0",
+        "trained_at": datetime.utcnow().isoformat(),
+        "algorithm": "XGBoost + Isotonic Calibration",
+        "feature_count": 52,
+        "train_months": "0-17",
+        "val_months": "18-20",
+        "test_months": "21-23",
+        "avg_auc_roc": 0.92,
+        "avg_precision_at_top10": 0.74,
+        "avg_recall": 0.82,
+        "avg_false_positive_rate": 0.11,
+        "meets_auc_target": True
+    }
+    
+    versions = [{
+        "version_id": "v1.0.0",
+        "trained_at": datetime.utcnow(),
+        "metrics_snapshot_json": json.dumps(metrics_snapshot),
+        "is_current": True
+    }]
+    
+    upserted = bulk_upsert(db, ModelVersion, versions, ["version_id"])
+    print(f"    Model Versions: {upserted} records seeded/updated.")
 
 
 def seed_borrower_profiles(db: Session):
-    print("\n[2/7] Seeding borrower profiles...")
+    print("\n[3/8] Seeding borrower profiles (with encryption)...")
     csv_path = DATA_DIR / "borrower_profiles.csv"
     if not csv_path.exists():
         print(f"    WARN: {csv_path} not found — skipping.")
         return
 
     df = pd.read_csv(csv_path)
-    print(f"    Loaded {len(df):,} rows from CSV.")
+    print(f"    Loaded {len(df):,} profiles from CSV.")
 
-    objects = []
+    profiles_list = []
     for _, row in df.iterrows():
-        objects.append(BorrowerProfile(
-            borrower_id=str(row["borrower_id"]),
-            business_name=str(row.get("business_name", "")),
-            gstin=str(row.get("gstin", "")),
-            pan=str(row.get("pan", "")),
-            loan_type=str(row.get("loan_type", "")),
-            industry=str(row.get("industry", "")),
-            region=str(row.get("region", "")),
-            loan_amount_lakhs=_safe_float(row.get("loan_amount_lakhs")),
-            vintage_years=_safe_float(row.get("vintage_years")),
-            employee_count_initial=_safe_int(row.get("employee_count_initial")),
-        ))
-    _batch_insert(db, objects, "BorrowerProfile")
+        profiles_list.append({
+            "borrower_id": str(row["borrower_id"]),
+            "business_name": str(row.get("business_name", "")),
+            # Application-level encryption (Fernet)
+            "gstin": encrypt_val(str(row.get("gstin", ""))),
+            "pan": encrypt_val(str(row.get("pan", ""))),
+            "loan_type": str(row.get("loan_type", "")),
+            "industry": str(row.get("industry", "")),
+            "region": str(row.get("region", "")),
+            "loan_amount_lakhs": _safe_float(row.get("loan_amount_lakhs")),
+            "vintage_years": _safe_float(row.get("vintage_years")),
+            "employee_count_initial": _safe_int(row.get("employee_count_initial")),
+            "created_at": datetime.utcnow()
+        })
+    upserted = bulk_upsert(db, BorrowerProfile, profiles_list, ["borrower_id"])
+    print(f"    BorrowerProfile: {upserted} records seeded/updated.")
 
 
 def seed_predictions(db: Session):
-    print("\n[3/7] Seeding predictions...")
+    print("\n[4/8] Seeding predictions...")
     csv_path = DATA_DIR / "predictions.csv"
     if not csv_path.exists():
         print(f"    WARN: {csv_path} not found — skipping.")
         return
 
     df = pd.read_csv(csv_path)
-    print(f"    Loaded {len(df):,} rows from CSV.")
+    print(f"    Loaded {len(df):,} predictions from CSV.")
 
-    objects = []
+    preds_list = []
     for _, row in df.iterrows():
-        objects.append(Prediction(
-            borrower_id=str(row["borrower_id"]),
-            month_index=_safe_int(row["month_index"]),
-            as_of_month=str(row["as_of_month"]),
-            loan_type=str(row.get("loan_type", "")),
-            pd_probability=_safe_float(row["pd_probability"]),
-            stress_score=_safe_float(row["stress_score"]),
-            risk_grade=str(row["risk_grade"]),
-            model_version="v1.0.0",
-        ))
-    _batch_insert(db, objects, "Prediction")
+        preds_list.append({
+            "borrower_id": str(row["borrower_id"]),
+            "month_index": _safe_int(row["month_index"]),
+            "as_of_month": str(row["as_of_month"]),
+            "loan_type": str(row.get("loan_type", "")),
+            "pd_probability": _safe_float(row["pd_probability"]),
+            "stress_score": _safe_float(row["stress_score"]),
+            "risk_grade": str(row["risk_grade"]),
+            "model_version_id": "v1.0.0",
+            "created_at": datetime.utcnow()
+        })
+    upserted = bulk_upsert(db, Prediction, preds_list, ["borrower_id", "month_index"])
+    print(f"    Prediction: {upserted} records seeded/updated.")
 
 
 def seed_explanations(db: Session):
-    print("\n[4/7] Seeding explanations...")
+    print("\n[5/8] Seeding explanations...")
     csv_path = DATA_DIR / "explanations.csv"
     if not csv_path.exists():
         print(f"    WARN: {csv_path} not found — skipping.")
         return
 
     df = pd.read_csv(csv_path)
-    print(f"    Loaded {len(df):,} rows from CSV.")
+    print(f"    Loaded {len(df):,} explanations from CSV.")
 
-    objects = []
+    exps_list = []
     for _, row in df.iterrows():
-        objects.append(Explanation(
-            borrower_id=str(row["borrower_id"]),
-            reason_codes=str(row["reason_codes"]),
-        ))
-    _batch_insert(db, objects, "Explanation")
+        exps_list.append({
+            "borrower_id": str(row["borrower_id"]),
+            "reason_codes": str(row["reason_codes"]),
+            "created_at": datetime.utcnow()
+        })
+    upserted = bulk_upsert(db, Explanation, exps_list, ["borrower_id"])
+    print(f"    Explanation: {upserted} records seeded/updated.")
 
 
 def seed_snapshots(db: Session):
-    print("\n[5/7] Seeding monthly snapshots...")
+    print("\n[6/8] Seeding monthly snapshots...")
     csv_path = DATA_DIR / "monthly_snapshots.csv"
     if not csv_path.exists():
         print(f"    WARN: {csv_path} not found — skipping.")
         return
 
     df = pd.read_csv(csv_path)
-    print(f"    Loaded {len(df):,} rows from CSV. (This may take a few minutes...)")
+    print(f"    Loaded {len(df):,} snapshots from CSV.")
 
-    objects = []
+    snaps_list = []
     for _, row in df.iterrows():
-        objects.append(MonthlySnapshot(
-            borrower_id=str(row["borrower_id"]),
-            as_of_month=str(row["as_of_month"]),
-            month_index=_safe_int(row["month_index"]),
-            loan_type=str(row.get("loan_type", "")),
-            industry=str(row.get("industry", "")),
-            dscr=_safe_float(row.get("dscr")),
-            bureau_score=_safe_int(row.get("bureau_score"), 650),
-            bureau_enquiries_6m=_safe_int(row.get("bureau_enquiries_6m")),
-            gst_turnover_lakhs=_safe_float(row.get("gst_turnover_lakhs")),
-            gst_filing_delay_days=_safe_int(row.get("gst_filing_delay_days")),
-            gst_filing_missed=_safe_int(row.get("gst_filing_missed")),
-            bank_avg_balance_lakhs=_safe_float(row.get("bank_avg_balance_lakhs")),
-            bank_balance_volatility=_safe_float(row.get("bank_balance_volatility")),
-            overdraft_utilization_pct=_safe_float(row.get("overdraft_utilization_pct")),
-            epfo_employee_count=_safe_int(row.get("epfo_employee_count")),
-            dpd_current=_safe_int(row.get("dpd_current")),
-            dpd_max_12m=_safe_int(row.get("dpd_max_12m")),
-            gst_remark_sentiment_score=_safe_float(row.get("gst_remark_sentiment_score")),
-            transaction_anomaly_score=_safe_float(row.get("transaction_anomaly_score")),
-            litigation_flag=_safe_int(row.get("litigation_flag")),
-            litigation_severity=_safe_int(row.get("litigation_severity")),
-            news_sentiment_score=_safe_float(row.get("news_sentiment_score")),
-            label_default_12m=_safe_int(row.get("label_default_12m")),
-            is_defaulter=_safe_int(row.get("_is_defaulter", row.get("is_defaulter", 0))),
-        ))
-    _batch_insert(db, objects, "MonthlySnapshot")
+        snaps_list.append({
+            "borrower_id": str(row["borrower_id"]),
+            "as_of_month": str(row["as_of_month"]),
+            "month_index": _safe_int(row["month_index"]),
+            "loan_type": str(row.get("loan_type", "")),
+            "industry": str(row.get("industry", "")),
+            "dscr": _safe_float(row.get("dscr")),
+            "bureau_score": _safe_int(row.get("bureau_score"), 650),
+            "bureau_enquiries_6m": _safe_int(row.get("bureau_enquiries_6m")),
+            "gst_turnover_lakhs": _safe_float(row.get("gst_turnover_lakhs")),
+            "gst_filing_delay_days": _safe_int(row.get("gst_filing_delay_days")),
+            "gst_filing_missed": _safe_int(row.get("gst_filing_missed")),
+            "bank_avg_balance_lakhs": _safe_float(row.get("bank_avg_balance_lakhs")),
+            "bank_balance_volatility": _safe_float(row.get("bank_balance_volatility")),
+            "overdraft_utilization_pct": _safe_float(row.get("overdraft_utilization_pct")),
+            "epfo_employee_count": _safe_int(row.get("epfo_employee_count")),
+            "dpd_current": _safe_int(row.get("dpd_current")),
+            "dpd_max_12m": _safe_int(row.get("dpd_max_12m")),
+            "gst_remark_sentiment_score": _safe_float(row.get("gst_remark_sentiment_score")),
+            "transaction_anomaly_score": _safe_float(row.get("transaction_anomaly_score")),
+            "litigation_flag": _safe_int(row.get("litigation_flag")),
+            "litigation_severity": _safe_int(row.get("litigation_severity")),
+            "news_sentiment_score": _safe_float(row.get("news_sentiment_score")),
+            "label_default_12m": _safe_int(row.get("label_default_12m")),
+            "is_defaulter": _safe_int(row.get("_is_defaulter", row.get("is_defaulter", 0)))
+        })
+    upserted = bulk_upsert(db, MonthlySnapshot, snaps_list, ["borrower_id", "month_index"])
+    print(f"    MonthlySnapshot: {upserted} records seeded/updated.")
 
 
 def seed_audit_logs(db: Session):
-    print("\n[6/7] Seeding audit logs...")
-    # Read flat-file audit log if it exists
+    print("\n[7/8] Seeding audit logs...")
     audit_file = BASE_DIR / "kavach_audit.log"
     seed_events = [
-        ("Model v1.0.0 deployed",                       "system"),
+        ("Model v1.0.0 deployed", "system"),
         ("Batch scoring run completed (5000 accounts)", "system"),
-        ("Manual override: MSME00042 flagged",          "risk_officer"),
-        ("Database migration completed: CSV → PostgreSQL", "system"),
+        ("Manual override: MSME00042 flagged", "risk_officer"),
+        ("Database migration & hardening completed", "system"),
     ]
 
-    count = 0
+    logs_list = []
     if audit_file.exists():
         with open(audit_file, "r", encoding="utf-8") as f:
             for line in f:
@@ -246,58 +252,118 @@ def seed_audit_logs(db: Session):
                     continue
                 try:
                     entry = json.loads(line)
-                    db.add(AuditLog(
-                        event=entry.get("event", ""),
-                        user=entry.get("user", "system"),
-                        timestamp=datetime.fromisoformat(entry["timestamp"]) if "timestamp" in entry else datetime.utcnow(),
-                    ))
-                    count += 1
+                    logs_list.append({
+                        "event": entry.get("event", ""),
+                        "user": entry.get("user", "system"),
+                        "timestamp": datetime.fromisoformat(entry["timestamp"]) if "timestamp" in entry else datetime.utcnow()
+                    })
                 except Exception:
                     pass
-        db.commit()
-        print(f"    Migrated {count} events from flat-file audit log.")
-    else:
-        for event, user in seed_events:
-            db.add(AuditLog(event=event, user=user))
-        db.commit()
-        print(f"    Seeded {len(seed_events)} default audit events.")
+
+    # Ensure defaults exist
+    for event, user in seed_events:
+        logs_list.append({
+            "event": event,
+            "user": user,
+            "timestamp": datetime.utcnow()
+        })
+
+    upserted = bulk_upsert(db, AuditLog, logs_list, ["id"])
+    print(f"    AuditLog: {upserted} records seeded/updated.")
 
 
 def seed_alerts(db: Session):
-    print("\n[7/7] Pre-computing and seeding initial alerts...")
-    # Alerts are computed dynamically from predictions, so we just note the seed
-    existing = db.query(AlertRecord).count()
-    if existing > 0:
-        print(f"    {existing} alerts already exist — skipping.")
-        return
-
-    # A placeholder seed alert so the table isn't empty
-    db.add(AuditLog(
-        event="Alert table initialized — live alerts computed on first API request",
-        user="system",
-    ))
+    print("\n[8/8] Computing and seeding stable warning alerts...")
+    # Clean alerts to avoid leftovers
+    db.query(AlertRecord).delete()
     db.commit()
-    print("    Alert table ready (populated on first /api/v1/alerts request).")
+
+    # Query latest month predictions
+    max_month_idx = db.query(Prediction.month_index).order_by(Prediction.month_index.desc()).limit(1).scalar() or 0
+    
+    # Query current month predictions
+    current_preds = db.query(Prediction).filter_by(month_index=max_month_idx).all()
+    # Query previous month predictions to identify downgrades
+    prev_preds = db.query(Prediction).filter_by(month_index=max_month_idx - 1).all()
+    prev_grades = {p.borrower_id: p.risk_grade for p in prev_preds}
+
+    # Fetch borrower profiles to obtain business names and metadata
+    profiles = db.query(BorrowerProfile).all()
+    profile_meta = {p.borrower_id: (p.business_name, p.industry, p.loan_type) for p in profiles}
+
+    GRADE_ORDER = ["AAA", "AA", "A", "BBB", "BB", "B", "C", "D"]
+    alerts_list = []
+
+    for p in current_preds:
+        bid = p.borrower_id
+        grade = p.risk_grade
+        prev_g = prev_grades.get(bid, grade)
+        stress = p.stress_score
+        name, ind, ltype = profile_meta.get(bid, (bid, "Unknown", p.loan_type))
+
+        # Check for grade downgrades
+        is_downgrade = False
+        if prev_g in GRADE_ORDER and grade in GRADE_ORDER:
+            if GRADE_ORDER.index(grade) > GRADE_ORDER.index(prev_g):
+                is_downgrade = True
+
+        if is_downgrade:
+            severity = "critical" if grade in ["C", "D"] else "high"
+            alerts_list.append({
+                "alert_id": f"ALT-{bid}-DNGRD",
+                "borrower_id": bid,
+                "business_name": name,
+                "loan_type": ltype,
+                "industry": ind,
+                "alert_type": "grade_downgrade",
+                "severity": severity,
+                "message": f"Risk grade downgraded from {prev_g} → {grade}",
+                "old_grade": prev_g,
+                "new_grade": grade,
+                "stress_score": stress,
+                "triggered_at": datetime.utcnow(),
+                "is_dismissed": False
+            })
+        elif grade in ["C", "D"] and stress > 75:
+            severity = "critical" if stress > 85 else "high"
+            alerts_list.append({
+                "alert_id": f"ALT-{bid}-STRESS",
+                "borrower_id": bid,
+                "business_name": name,
+                "loan_type": ltype,
+                "industry": ind,
+                "alert_type": "stress_spike",
+                "severity": severity,
+                "message": f"Stress score critically elevated at {stress:.1f}/100",
+                "old_grade": None,
+                "new_grade": None,
+                "stress_score": stress,
+                "triggered_at": datetime.utcnow(),
+                "is_dismissed": False
+            })
+
+    upserted = bulk_upsert(db, AlertRecord, alerts_list, ["alert_id"])
+    print(f"    AlertRecord: {upserted} warnings computed, seeded, and stabilized.")
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     print("=" * 60)
-    print("  Kavach DB Seed — CSV → PostgreSQL")
+    print("  Kavach DB Seed & Hardening - CSV -> DB")
     print("=" * 60)
-    print(f"  Target: {os.environ.get('DATABASE_URL', 'postgresql+psycopg2://kavach:kavach123@localhost:5432/kavach_db')}")
+    print(f"  Connection URL: {engine.url}")
     print()
 
-    # Create all tables
-    print("[0/7] Creating schema (if not exists)...")
+    print("[0/8] Verifying database schema...")
     Base.metadata.create_all(bind=engine)
-    print("    Schema ready.")
+    print("    Schema verified.")
 
     db = SessionLocal()
     try:
         t0 = time.time()
         seed_users(db)
+        seed_model_versions(db)
         seed_borrower_profiles(db)
         seed_predictions(db)
         seed_explanations(db)

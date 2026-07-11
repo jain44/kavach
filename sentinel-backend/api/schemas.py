@@ -30,8 +30,6 @@ class PredictRequest(BaseModel):
     borrower_id: str
     loan_type: Optional[str] = None
     as_of_date: Optional[str] = None
-
-
 class PredictResponse(BaseModel):
     borrower_id: str
     pd_probability: float = Field(..., description="Probability of Default 0-1")
@@ -42,7 +40,8 @@ class PredictResponse(BaseModel):
     loan_type: str
     industry: str
     confidence_level: Optional[str] = "high"
-
+    pan: Optional[str] = None
+    gstin: Optional[str] = None
 
 
 # ─── Explain ──────────────────────────────────────────────────────────────────
