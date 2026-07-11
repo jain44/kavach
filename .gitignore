@@ -1,0 +1,39 @@
+# Node dependencies
+node_modules/
+
+# Python virtual environments & cache
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Log files
+*.log
+sentinel-backend/kavach_audit.log
+sentinel-backend/sentinel_audit.log
+
+# Environment variables / secrets
+.env
+.env.local
+.env.*.local
+
+# Databases (SQLite etc.)
+*.db
+*.sqlite
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# Editor / IDE directories
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

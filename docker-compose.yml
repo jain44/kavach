@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL Database ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: kavach_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kavach
+      POSTGRES_PASSWORD: kavach123
+      POSTGRES_DB: kavach_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kavach -d kavach_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── FastAPI Backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./sentinel-backend
+      dockerfile: Dockerfile
+    container_name: kavach_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://kavach:kavach123@postgres:5432/kavach_db
+      KAVACH_SECRET_KEY: 36eadbd8d997ba82d14837e2bee9de87617b4d9698ea0d06d22c63d5ba9b1143
+      KAVACH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:80
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount models and data so you don't have to rebuild on data changes
+      - ./sentinel-backend/models:/app/models:ro
+      - ./sentinel-backend/data:/app/data:ro
+      - ./sentinel-backend/kavach_audit.log:/app/kavach_audit.log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── React Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./sentinel-frontend
+      dockerfile: Dockerfile
+    container_name: kavach_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+
+volumes:
+  postgres_data:
+    driver: local
