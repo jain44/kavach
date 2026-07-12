@@ -20,5 +20,5 @@ echo "[3/3] Starting Uvicorn server..."
 exec uvicorn api.main:app \
     --host 0.0.0.0 \
     --port "${PORT:-8000}" \
-    --workers 2 \
+    --workers "${WEB_CONCURRENCY:-1}" \
     --log-level info
