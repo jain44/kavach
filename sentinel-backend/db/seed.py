@@ -361,6 +361,14 @@ def main():
 
     db = SessionLocal()
     try:
+        # Check if database has already been seeded to avoid boot timeouts
+        try:
+            if db.query(User).count() > 0:
+                print("  [SEED] Database already contains records. Skipping seed process.")
+                return
+        except Exception as e:
+            print(f"  [SEED] Could not query User table: {e}. Proceeding with seed.")
+
         t0 = time.time()
         seed_users(db)
         seed_model_versions(db)

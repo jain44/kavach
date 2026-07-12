@@ -20,6 +20,9 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+psycopg://kavach:kavach123@localhost:5432/kavach_db"
 )
+if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
 
 # ─── Engine Initialization ───────────────────────────────────────────────────
 
