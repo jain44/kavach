@@ -25,13 +25,8 @@ numpy==2.1.2
 pandas==2.2.3
 scipy==1.14.1
 
-# NLP (lightweight)
-transformers==4.45.2
-torch==2.4.1
-
 # Utils
 joblib==1.4.2
-mlflow==2.16.2
 matplotlib==3.9.2
 seaborn==0.13.2
 tqdm==4.66.5
