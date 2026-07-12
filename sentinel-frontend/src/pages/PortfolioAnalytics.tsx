@@ -218,6 +218,7 @@ export default function PortfolioAnalytics() {
             </div>
           </div>
         </motion.div>
+      </div>
 
       {/* Quarter over Quarter Default Predictions Comparison */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
