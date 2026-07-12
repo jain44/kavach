@@ -371,11 +371,15 @@ def main():
     try:
         # Check if database has already been seeded to avoid boot timeouts
         try:
-            if db.query(User).count() > 0:
+            user_count = db.query(User).count()
+            pred_count = db.query(Prediction).count()
+            if user_count > 0 and pred_count > 0:
                 print("  [SEED] Database already contains records. Skipping seed process.")
                 return
+            else:
+                print(f"  [SEED] Database incomplete (Users: {user_count}, Predictions: {pred_count}). Seeding data...")
         except Exception as e:
-            print(f"  [SEED] Could not query User table: {e}. Proceeding with seed.")
+            print(f"  [SEED] Could not query database tables: {e}. Proceeding with seed.")
 
         t0 = time.time()
         seed_users(db)
