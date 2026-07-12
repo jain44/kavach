@@ -1,0 +1,48 @@
+# render.yaml — Kavach Infrastructure as Code
+# Deploy with: Render Dashboard → New → Blueprint → Connect this repo
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ─── FastAPI Backend ──────────────────────────────────────────────────────────
+  - type: web
+    name: kavach-backend
+    runtime: docker
+    dockerfilePath: ./sentinel-backend/Dockerfile
+    dockerContext: ./sentinel-backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kavach-postgres
+          property: connectionString
+      - key: KAVACH_SECRET_KEY
+        generateValue: true
+      - key: SENTINEL_ALLOWED_ORIGINS
+        value: https://kavach-frontend.vercel.app,https://kavach.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # ─── React Frontend (Static Site) ─────────────────────────────────────────────
+  # NOTE: We recommend deploying the frontend on Vercel for better performance.
+  # Uncomment this block if you prefer to host it on Render instead.
+  #
+  # - type: web
+  #   name: kavach-frontend
+  #   runtime: docker
+  #   dockerfilePath: ./sentinel-frontend/Dockerfile
+  #   dockerContext: ./sentinel-frontend
+  #   plan: free
+  #   envVars:
+  #     - key: VITE_API_BASE_URL
+  #       fromService:
+  #         name: kavach-backend
+  #         type: web
+  #         property: hostport
+
+databases:
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────────
+  - name: kavach-postgres
+    plan: free
+    databaseName: kavach_db
+    user: kavach
