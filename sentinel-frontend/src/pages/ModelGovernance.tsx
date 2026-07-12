@@ -379,7 +379,7 @@ export default function ModelGovernance() {
                 <Tooltip
                   contentStyle={{ background: 'rgba(15,15,20,0.95)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
-                  formatter={(v: any, name: string) => [`${v}%`, name]}
+                  formatter={(v: any, name: any) => [`${v}%`, name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
                 <Line type="monotone" dataKey="AUC" stroke="var(--accent-gold)" strokeWidth={2} dot={{ r: 4, fill: 'var(--accent-gold)' }} activeDot={{ r: 6 }} />
