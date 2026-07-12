@@ -121,6 +121,8 @@ _metrics_doc:     Optional[dict] = None
 _fairness_doc:    Optional[dict] = None
 _fairness_status: Optional[str]  = None
 _models:          dict            = {}
+_models_loaded:   bool            = False
+_resolved_models_dir: Path        = MODELS_DIR
 _backtest_doc:    Optional[dict] = None  # Walk-forward backtest results
 
 GRADE_ORDER = ["AAA", "AA", "A", "BBB", "BB", "B", "C", "D"]
@@ -197,7 +199,7 @@ def _mask_pii(profile_dict: dict, role: str) -> dict:
 
 @app.on_event("startup")
 async def startup():
-    global _metrics_doc, _fairness_doc, _fairness_status, _backtest_doc
+    global _metrics_doc, _fairness_doc, _fairness_status, _backtest_doc, _resolved_models_dir
 
     # Auto-create any new tables (e.g. account_notes) without full migration
     Base.metadata.create_all(bind=engine)
@@ -217,6 +219,8 @@ async def startup():
         except Exception as e:
             print(f"  [DB] Error reading current_version.txt: {e}")
 
+    _resolved_models_dir = resolved_models_dir
+
     # Load governance JSON (model metrics + fairness) from disk
     try:
         with open(resolved_models_dir / "model_metrics.json") as f:
@@ -232,22 +236,8 @@ async def startup():
             "meets_auc_target": True, "per_segment_metrics": [],
         }
 
-    # Load ML model pickles
-    try:
-        import sys
-        import ml.train_model
-        sys.modules["__main__"].IsotonicCalibratedXGB   = ml.train_model.IsotonicCalibratedXGB
-        sys.modules["__main__"]._SHAPEstimatorWrapper   = ml.train_model._SHAPEstimatorWrapper
-        from ml.train_model import LOAN_TYPES
-        for lt in LOAN_TYPES:
-            mf = resolved_models_dir / f"model_{lt.replace(' ', '_').lower()}.pkl"
-            if mf.exists():
-                _models[lt] = joblib.load(mf)
-                print(f"  OK Model: {lt}")
-            else:
-                print(f"  WARN Model not found: {mf}")
-    except Exception as e:
-        print(f"  ERROR Loading models: {e}")
+    # ML model pickles are loaded lazily on first dynamic inference request.
+    print("  OK ML model loading deferred until first simulation/live prediction request")
 
     # Fairness report
     try:
@@ -341,9 +331,36 @@ def _get_snapshots_df(borrower_id: str, db: Session) -> pd.DataFrame:
     } for r in rows])
 
 
+
+def _ensure_models_loaded() -> None:
+    """Load model pickle files on demand instead of during server startup."""
+    global _models_loaded
+    if _models_loaded:
+        return
+
+    try:
+        import sys
+        import ml.train_model
+        sys.modules["__main__"].IsotonicCalibratedXGB = ml.train_model.IsotonicCalibratedXGB
+        sys.modules["__main__"]._SHAPEstimatorWrapper = ml.train_model._SHAPEstimatorWrapper
+        from ml.train_model import LOAN_TYPES
+        for lt in LOAN_TYPES:
+            if lt in _models:
+                continue
+            mf = _resolved_models_dir / f"model_{lt.replace(' ', '_').lower()}.pkl"
+            if mf.exists():
+                _models[lt] = joblib.load(mf)
+                print(f"  OK Model loaded lazily: {lt}")
+            else:
+                print(f"  WARN Model not found: {mf}")
+        _models_loaded = True
+    except Exception as e:
+        print(f"  ERROR Loading models lazily: {e}")
+        raise
 # ─── ML Inference Helper ──────────────────────────────────────────────────────
 
 def run_dynamic_inference(borrower_id: str, snapshot_df_modify_fn, db: Session) -> tuple:
+    _ensure_models_loaded()
     history = _get_snapshots_df(borrower_id, db)
     if history.empty:
         raise ValueError(f"No snapshot history found for borrower {borrower_id}")
