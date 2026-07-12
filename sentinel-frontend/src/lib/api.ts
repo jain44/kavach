@@ -29,6 +29,17 @@ export const predict = (borrower_id: string) =>
 export const explain = (borrower_id: string) =>
   api.get(`/explain/${borrower_id}`).then((r) => r.data)
 
+// ─── Account History & Notes ──────────────────────────────────────────────────
+
+export const getAccountHistory = (borrower_id: string) =>
+  api.get(`/account/${borrower_id}/history`).then((r) => r.data)
+
+export const getAccountNotes = (borrower_id: string) =>
+  api.get(`/account/${borrower_id}/notes`).then((r) => r.data)
+
+export const postAccountNote = (borrower_id: string, note_text: string) =>
+  api.post(`/account/${borrower_id}/notes`, { note_text }).then((r) => r.data)
+
 // ─── Portfolio ────────────────────────────────────────────────────────────────
 
 export interface PortfolioParams {

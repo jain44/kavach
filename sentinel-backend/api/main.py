@@ -11,6 +11,7 @@ Hardened Features:
 - Active model version filtering
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -64,11 +65,15 @@ from api.schemas import (
     GovernanceResponse, SegmentMetrics,
     Alert, AlertsResponse,
     LivePredictRequest, LivePredictResponse,
+    AccountHistoryResponse, AccountHistoryPoint,
+    AccountNoteIn, AccountNoteOut, AccountNotesResponse,
+    QuarterComparisonPoint,
 )
 from db.database import get_db, SessionLocal, engine
 from db.models import (
     Base, User, BorrowerProfile, Prediction,
-    Explanation, MonthlySnapshot, AuditLog, AlertRecord, ModelVersion
+    Explanation, MonthlySnapshot, AuditLog, AlertRecord, ModelVersion,
+    AccountNote,
 )
 from db.crypto import decrypt_val
 from api.auth import create_token, get_current_user, require_roles
@@ -97,7 +102,7 @@ app = FastAPI(
 )
 
 allowed_origins_str = os.environ.get(
-    "KAVACH_ALLOWED_ORIGINS",
+    "SENTINEL_ALLOWED_ORIGINS",
     "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
 )
 allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
@@ -116,6 +121,7 @@ _metrics_doc:     Optional[dict] = None
 _fairness_doc:    Optional[dict] = None
 _fairness_status: Optional[str]  = None
 _models:          dict            = {}
+_backtest_doc:    Optional[dict] = None  # Walk-forward backtest results
 
 GRADE_ORDER = ["AAA", "AA", "A", "BBB", "BB", "B", "C", "D"]
 
@@ -191,13 +197,29 @@ def _mask_pii(profile_dict: dict, role: str) -> dict:
 
 @app.on_event("startup")
 async def startup():
-    global _metrics_doc, _fairness_doc, _fairness_status
+    global _metrics_doc, _fairness_doc, _fairness_status, _backtest_doc
+
+    # Auto-create any new tables (e.g. account_notes) without full migration
+    Base.metadata.create_all(bind=engine)
 
     print("Starting Kavach API v2.0 (Hardened)...")
 
+    # Load current model path
+    current_txt = MODELS_DIR / "current_version.txt"
+    resolved_models_dir = MODELS_DIR
+    if current_txt.exists():
+        try:
+            with open(current_txt, "r") as f:
+                curr_version = f.read().strip()
+            if curr_version:
+                resolved_models_dir = MODELS_DIR / curr_version
+                print(f"  [DB] Loading model version from resolved path: {curr_version}")
+        except Exception as e:
+            print(f"  [DB] Error reading current_version.txt: {e}")
+
     # Load governance JSON (model metrics + fairness) from disk
     try:
-        with open(MODELS_DIR / "model_metrics.json") as f:
+        with open(resolved_models_dir / "model_metrics.json") as f:
             _metrics_doc = json.load(f)
         print(f"  OK Model metrics: AUC {_metrics_doc.get('avg_auc_roc', 'N/A')}")
     except FileNotFoundError:
@@ -218,7 +240,7 @@ async def startup():
         sys.modules["__main__"]._SHAPEstimatorWrapper   = ml.train_model._SHAPEstimatorWrapper
         from ml.train_model import LOAN_TYPES
         for lt in LOAN_TYPES:
-            mf = MODELS_DIR / f"model_{lt.replace(' ', '_').lower()}.pkl"
+            mf = resolved_models_dir / f"model_{lt.replace(' ', '_').lower()}.pkl"
             if mf.exists():
                 _models[lt] = joblib.load(mf)
                 print(f"  OK Model: {lt}")
@@ -229,7 +251,7 @@ async def startup():
 
     # Fairness report
     try:
-        with open(MODELS_DIR / "fairness_report.json") as f:
+        with open(resolved_models_dir / "fairness_report.json") as f:
             _fairness_doc = json.load(f)
         flagged = _fairness_doc.get("flagged_segments", [])
         n = len(flagged)
@@ -242,6 +264,20 @@ async def startup():
     except FileNotFoundError:
         _fairness_doc   = None
         _fairness_status = "Fairness check: fairness_report.json not found"
+
+    # Load walk-forward backtest results from models/ JSON
+    try:
+        backtest_path = MODELS_DIR / "model_backtest_results.json"
+        if not backtest_path.exists():
+            backtest_path = resolved_models_dir / "model_backtest_results.json"
+        if backtest_path.exists():
+            with open(backtest_path) as f:
+                _backtest_doc = json.load(f)
+            print(f"  OK Walk-forward backtest: {len(_backtest_doc)} windows loaded")
+        else:
+            print("  WARN model_backtest_results.json not found")
+    except Exception as e:
+        print(f"  WARN Could not load backtest results: {e}")
 
     print("  OK Kavach ready!")
 
@@ -386,7 +422,7 @@ def predict(req: PredictRequest, db: Session = Depends(get_db), _user: dict = De
         raise HTTPException(status_code=404, detail=f"Borrower {req.borrower_id} not found")
 
     hist_len = db.query(MonthlySnapshot).filter_by(borrower_id=req.borrower_id).count()
-    conf_level = "low — limited history" if hist_len < 3 else "high"
+    conf_level = f"low — limited history ({hist_len}mo)" if hist_len < 3 else "high"
 
     # Decrypt and dynamically mask GSTIN & PAN based on user role
     profile_dict = {
@@ -441,6 +477,93 @@ def explain(borrower_id: str, db: Session = Depends(get_db), _user: dict = Depen
         pd_probability=pred.pd_probability,
         stress_score=pred.stress_score,
         risk_grade=pred.risk_grade,
+    )
+
+
+# ─── ACCOUNT HISTORY ──────────────────────────────────────────────────────────
+
+@app.get("/api/v1/account/{borrower_id}/history", response_model=AccountHistoryResponse, tags=["Account"])
+def account_history(
+    borrower_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    """Return the full prediction history for a borrower — real 12-month PD/stress trend."""
+    rows = (
+        db.query(Prediction)
+        .filter_by(borrower_id=borrower_id)
+        .order_by(Prediction.month_index.asc())
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No prediction history for {borrower_id}")
+
+    history = [
+        AccountHistoryPoint(
+            month=r.as_of_month,
+            month_index=r.month_index,
+            stress_score=round(r.stress_score, 2),
+            pd_probability=round(r.pd_probability, 4),
+            risk_grade=r.risk_grade,
+        )
+        for r in rows
+    ]
+    return AccountHistoryResponse(borrower_id=borrower_id, history=history)
+
+
+# ─── ACCOUNT NOTES ────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/account/{borrower_id}/notes", response_model=AccountNotesResponse, tags=["Account"])
+def get_account_notes(
+    borrower_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    """Retrieve all RM follow-up notes for a borrower, newest first."""
+    notes = (
+        db.query(AccountNote)
+        .filter_by(borrower_id=borrower_id)
+        .order_by(AccountNote.created_at.desc())
+        .all()
+    )
+    return AccountNotesResponse(
+        borrower_id=borrower_id,
+        notes=[
+            AccountNoteOut(
+                id=n.id,
+                note_text=n.note_text,
+                created_by=n.created_by,
+                created_at=n.created_at.isoformat(),
+            )
+            for n in notes
+        ],
+    )
+
+
+@app.post("/api/v1/account/{borrower_id}/notes", response_model=AccountNoteOut, status_code=201, tags=["Account"])
+def post_account_note(
+    borrower_id: str,
+    payload: AccountNoteIn,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    """Save a Relationship Manager follow-up note for a borrower."""
+    if not payload.note_text.strip():
+        raise HTTPException(status_code=422, detail="Note text cannot be empty")
+    note = AccountNote(
+        borrower_id=borrower_id,
+        note_text=payload.note_text.strip(),
+        created_by=_user.get("username", "rm"),
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    _persist_audit_event(f"RM note saved for {borrower_id}", _user.get("username", "rm"))
+    return AccountNoteOut(
+        id=note.id,
+        note_text=note.note_text,
+        created_by=note.created_by,
+        created_at=note.created_at.isoformat(),
     )
 
 
@@ -517,14 +640,36 @@ def portfolio(
     prev_grades = {r[0]: r[1] for r in prev_rows}
     prev_stress = {r[0]: r[2] for r in prev_rows}
 
-    # 3. Pull snapshots (DPD, DSCR, CIBIL)
-    sql_snap = text("""
-        SELECT DISTINCT ON (borrower_id) borrower_id, dpd_current, dscr, bureau_score
-        FROM monthly_snapshots
-        ORDER BY borrower_id, month_index DESC
-    """)
-    snap_rows = db.execute(sql_snap).fetchall()
+    # 3. Pull snapshots (DPD, DSCR, CIBIL) — PostgreSQL-first with SQLite fallback
+    try:
+        sql_snap = text("""
+            SELECT DISTINCT ON (borrower_id) borrower_id, dpd_current, dscr, bureau_score
+            FROM monthly_snapshots
+            ORDER BY borrower_id, month_index DESC
+        """)
+        snap_rows = db.execute(sql_snap).fetchall()
+    except Exception:
+        # SQLite-compatible fallback (DISTINCT ON is PostgreSQL-specific)
+        sql_snap = text("""
+            SELECT ms.borrower_id, ms.dpd_current, ms.dscr, ms.bureau_score
+            FROM monthly_snapshots ms
+            INNER JOIN (
+                SELECT borrower_id, MAX(month_index) AS max_month
+                FROM monthly_snapshots GROUP BY borrower_id
+            ) latest ON ms.borrower_id = latest.borrower_id AND ms.month_index = latest.max_month
+        """)
+        snap_rows = db.execute(sql_snap).fetchall()
+
     snap_meta = {r[0]: (r[1], r[2], r[3]) for r in snap_rows}
+
+    # 3.5 Pull history counts for NTC checks
+    sql_hist_len = text("""
+        SELECT borrower_id, COUNT(*)
+        FROM monthly_snapshots
+        GROUP BY borrower_id
+    """)
+    hist_len_rows = db.execute(sql_hist_len).fetchall()
+    hist_lens = {r[0]: r[1] for r in hist_len_rows}
 
     # 4. Sort and Paginate
     sort_col = sort_by if sort_by in df.columns else "stress_score"
@@ -543,6 +688,9 @@ def portfolio(
         delta = round(cur_stress - prev_s, 2) if prev_s is not None else None
         dpd, dscr, bureau = snap_meta.get(bid, (0, 1.2, 680))
 
+        hist_len = hist_lens.get(bid, 0)
+        conf_level = f"low — limited history ({hist_len}mo)" if hist_len < 3 else "high"
+
         accounts.append(PortfolioAccount(
             borrower_id=bid,
             business_name=str(row["business_name"]),
@@ -558,7 +706,8 @@ def portfolio(
             dpd_current=int(dpd),
             dscr=float(dscr),
             bureau_score=int(bureau),
-            as_of_month=str(row["as_of_month"])
+            as_of_month=str(row["as_of_month"]),
+            confidence_level=conf_level
         ))
 
     grade_counts = df["risk_grade"].value_counts().to_dict()
@@ -641,11 +790,11 @@ def simulate(req: SimulateRequest, db: Session = Depends(get_db), _user: dict = 
 # ─── LIVE PREDICT ─────────────────────────────────────────────────────────────
 
 @app.post("/api/v1/predict/live", response_model=LivePredictResponse, tags=["Scoring"])
-def predict_live(req: LivePredictRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def predict_live(req: LivePredictRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     borrower_id = req.borrower_id
     snap        = req.current_snapshot
 
-    profile = _get_profile(borrower_id, db)
+    profile = await asyncio.to_thread(_get_profile, borrower_id, db)
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Borrower {borrower_id} not found")
 
@@ -678,15 +827,27 @@ def predict_live(req: LivePredictRequest, db: Session = Depends(get_db), user: d
         return pd.concat([history_df, pd.DataFrame([new_row])], ignore_index=True)
 
     try:
-        pd_prob, stress, grade, reasons, last_row = run_dynamic_inference(borrower_id, modify_fn, db)
+        pd_prob, stress, grade, reasons, last_row = await asyncio.to_thread(
+            run_dynamic_inference, borrower_id, modify_fn, db
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Live inference error: {str(e)}")
 
     is_ntc     = bool(last_row["is_ntc"].iloc[0]) if last_row is not None and "is_ntc" in last_row.columns else False
-    conf_level = "low — limited history" if is_ntc else "high"
+    if is_ntc:
+        db_hist_len = await asyncio.to_thread(lambda: db.query(MonthlySnapshot).filter_by(borrower_id=borrower_id).count())
+        conf_level = f"low — limited history ({db_hist_len + 1}mo)"
+    else:
+        conf_level = "high"
     narrative  = _build_narrative(borrower_id, grade, stress, [ReasonCode(**r) for r in reasons])
 
-    _persist_audit_event(f"Live predict: {borrower_id} -> grade {grade}, stress {stress:.1f}", user["username"])
+    await asyncio.to_thread(
+        _persist_audit_event,
+        f"Live predict: {borrower_id} -> grade {grade}, stress {stress:.1f}",
+        user["username"]
+    )
+
+    active_version = await asyncio.to_thread(_get_active_version_id, db)
 
     return LivePredictResponse(
         borrower_id=borrower_id,
@@ -695,7 +856,7 @@ def predict_live(req: LivePredictRequest, db: Session = Depends(get_db), user: d
         risk_grade=grade,
         top_reason_codes=[ReasonCode(**r) for r in reasons],
         narrative_summary=narrative,
-        model_version=_get_active_version_id(db),
+        model_version=active_version,
         confidence_level=conf_level,
     )
 
@@ -759,6 +920,25 @@ def analytics(db: Session = Depends(get_db), _user: dict = Depends(get_current_u
         for g in GRADE_ORDER
     ]
 
+    # Quarter-over-quarter default prediction comparison by loan_type
+    sorted_months = sorted(merged["month_index"].unique())
+    max_m = int(max(sorted_months))
+    current_q = merged[merged["month_index"] >= max_m - 2]
+    prior_q   = merged[(merged["month_index"] >= max_m - 5) & (merged["month_index"] < max_m - 2)]
+
+    quarter_comparison = []
+    for lt in merged["loan_type"].unique():
+        cq = current_q[current_q["loan_type"] == lt]
+        pq = prior_q[prior_q["loan_type"] == lt]
+        cq_pd = round(float(cq["stress_score"].mean()), 2) if len(cq) else 0.0
+        pq_pd = round(float(pq["stress_score"].mean()), 2) if len(pq) else 0.0
+        quarter_comparison.append(QuarterComparisonPoint(
+            segment=lt,
+            current_q_avg_pd=cq_pd,
+            prior_q_avg_pd=pq_pd,
+            delta_pp=round(cq_pd - pq_pd, 2),
+        ))
+
     return AnalyticsResponse(
         stress_trend=trend[-12:],
         loan_type_breakdown=breakdown("loan_type"),
@@ -768,6 +948,7 @@ def analytics(db: Session = Depends(get_db), _user: dict = Depends(get_current_u
         total_accounts=total,
         portfolio_avg_stress=round(float(latest_all["stress_score"].mean()), 2),
         high_risk_accounts=int(latest_all["risk_grade"].isin(["C", "D"]).sum()),
+        quarter_comparison=quarter_comparison,
     )
 
 
@@ -789,6 +970,14 @@ def governance(
             recall=m.get("recall", 0.8),
             false_positive_rate=m.get("false_positive_rate", 0.1),
             test_n=m.get("test_n", 100),
+            auc_roc_ci_2p5=m.get("auc_roc_ci_2p5"),
+            auc_roc_ci_97p5=m.get("auc_roc_ci_97p5"),
+            precision_at_top10pct_ci_2p5=m.get("precision_at_top10pct_ci_2p5"),
+            precision_at_top10pct_ci_97p5=m.get("precision_at_top10pct_ci_97p5"),
+            recall_ci_2p5=m.get("recall_ci_2p5"),
+            recall_ci_97p5=m.get("recall_ci_97p5"),
+            false_positive_rate_ci_2p5=m.get("false_positive_rate_ci_2p5"),
+            false_positive_rate_ci_97p5=m.get("false_positive_rate_ci_97p5"),
         )
         for m in _metrics_doc.get("per_segment_metrics", [])
     ]
@@ -797,6 +986,16 @@ def governance(
     active_version = db.query(ModelVersion).filter_by(is_current=True).first()
     trained_at_str = active_version.trained_at.isoformat() if active_version else _metrics_doc["trained_at"]
     version_id_str = active_version.version_id if active_version else _metrics_doc["model_version"]
+
+    # Build backtest_results from loaded JSON
+    backtest_pts = None
+    if _backtest_doc:
+        from api.schemas import BacktestPoint as _BP
+        backtest_pts = [
+            _BP(window=pt["window"], auc=pt["auc"],
+                precision=pt["precision"], recall=pt["recall"], fpr=pt["fpr"])
+            for pt in _backtest_doc
+        ]
 
     return GovernanceResponse(
         model_version=version_id_str,
@@ -815,6 +1014,15 @@ def governance(
         audit_log=_load_audit_log_from_db(db),
         fairness=_fairness_doc,
         fairness_status=_fairness_status,
+        avg_auc_roc_ci_2p5=_metrics_doc.get("avg_auc_roc_ci_2p5"),
+        avg_auc_roc_ci_97p5=_metrics_doc.get("avg_auc_roc_ci_97p5"),
+        avg_precision_at_top10_ci_2p5=_metrics_doc.get("avg_precision_at_top10_ci_2p5"),
+        avg_precision_at_top10_ci_97p5=_metrics_doc.get("avg_precision_at_top10_ci_97p5"),
+        avg_recall_ci_2p5=_metrics_doc.get("avg_recall_ci_2p5"),
+        avg_recall_ci_97p5=_metrics_doc.get("avg_recall_ci_97p5"),
+        avg_false_positive_rate_ci_2p5=_metrics_doc.get("avg_false_positive_rate_ci_2p5"),
+        avg_false_positive_rate_ci_97p5=_metrics_doc.get("avg_false_positive_rate_ci_97p5"),
+        backtest_results=backtest_pts,
     )
 
 

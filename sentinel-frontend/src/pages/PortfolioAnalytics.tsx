@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { BarChart3, TrendingUp, Users, AlertTriangle, PieChart as PieIcon, MapPin, Briefcase } from 'lucide-react'
+import { BarChart3, TrendingUp, Users, AlertTriangle, PieChart as PieIcon, MapPin, Briefcase, Download } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Bar
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Bar, BarChart
 } from 'recharts'
 import { getAnalytics } from '../lib/api'
 import { MetricCard, PageLoader, RiskGradeBadge, gradeToColor, stressToColor } from '../components/ui'
@@ -40,14 +40,19 @@ export default function PortfolioAnalytics() {
   return (
     <div className="page-content">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 20 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(201,168,76,0.12)', flexShrink: 0, marginTop: 2 }}>
-          <BarChart3 size={15} style={{ color: 'var(--accent-gold)' }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(201,168,76,0.12)', flexShrink: 0, marginTop: 2 }}>
+            <BarChart3 size={15} style={{ color: 'var(--accent-gold)' }} />
+          </div>
+          <div>
+            <h1 className="page-title" style={{ marginBottom: 2 }}>Portfolio Analytics</h1>
+            <p className="page-subtitle">Aggregate stress trends, segment comparisons, and distribution analysis</p>
+          </div>
         </div>
-        <div>
-          <h1 className="page-title" style={{ marginBottom: 2 }}>Portfolio Analytics</h1>
-          <p className="page-subtitle">Aggregate stress trends, segment comparisons, and distribution analysis</p>
-        </div>
+        <button onClick={() => window.print()} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Download size={13} /> Export to PDF
+        </button>
       </div>
 
       {/* KPI Row */}
@@ -211,6 +216,64 @@ export default function PortfolioAnalytics() {
                 </div>
               ))}
             </div>
+          </div>
+      </div>
+
+      {/* Quarter over Quarter Default Predictions Comparison */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+        {/* Q/Q Chart */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="glass-card" style={{ padding: 20 }}>
+          <div style={{ marginBottom: 12 }}>
+            <span className="section-title">Quarter-over-Quarter Predictions Comparison</span>
+            <p className="section-sub">Average default stress comparison (Current vs Prior Quarter)</p>
+          </div>
+          {data.quarter_comparison && data.quarter_comparison.length > 0 ? (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={data.quarter_comparison} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="segment" tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#141b2d', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11 }}
+                  formatter={(val: any) => [`${val}`, 'Avg Stress']}
+                />
+                <Bar dataKey="prior_q_avg_pd" name="Prior Quarter" fill="#2e4960" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="current_q_avg_pd" name="Current Quarter" fill="var(--accent-gold)" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>Comparison data unavailable</div>
+          )}
+        </motion.div>
+
+        {/* Q/Q Metrics List */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="glass-card" style={{ padding: 20 }}>
+          <div style={{ marginBottom: 12 }}>
+            <span className="section-title">Risk Change Summary</span>
+            <p className="section-sub">Quarterly delta across product lines</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.quarter_comparison?.map((qc: any) => {
+              const worsened = qc.delta_pp > 0;
+              return (
+                <div key={qc.segment} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>{qc.segment}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                      Prior Q: {qc.prior_q_avg_pd.toFixed(1)} · Current Q: {qc.current_q_avg_pd.toFixed(1)}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.78rem', fontFamily: 'JetBrains Mono,monospace', fontWeight: 700, color: worsened ? '#ef4444' : '#10b981' }}>
+                      {worsened ? '+' : ''}{qc.delta_pp.toFixed(1)}
+                    </span>
+                    <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 6, background: worsened ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: worsened ? '#ef4444' : '#10b981' }}>
+                      {worsened ? 'Worsening' : 'Improving'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </motion.div>
       </div>

@@ -1,0 +1,332 @@
+{
+  "overall": {
+    "fpr": 0.1021,
+    "fnr": 0.5278,
+    "total_n": 14934,
+    "positive_n": 1404
+  },
+  "by_industry": {
+    "Agriculture Allied": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 1480,
+      "n_positive": 139,
+      "n_fn": 68,
+      "fpr": 0.1051,
+      "fnr": 0.4892,
+      "fnr_ci_95_lo": 0.4075,
+      "fnr_ci_95_hi": 0.5715,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": 0.0031,
+      "fnr_deviation": -0.0386
+    },
+    "Auto Ancillary": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1434,
+      "n_positive": 116,
+      "n_fn": 78,
+      "fpr": 0.0835,
+      "fnr": 0.6724,
+      "fnr_ci_95_lo": 0.5827,
+      "fnr_ci_95_hi": 0.7511,
+      "ci_overlaps_baseline": false,
+      "fpr_deviation": -0.0186,
+      "fnr_deviation": 0.1446
+    },
+    "Construction": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1449,
+      "n_positive": 170,
+      "n_fn": 66,
+      "fpr": 0.2017,
+      "fnr": 0.3882,
+      "fnr_ci_95_lo": 0.3182,
+      "fnr_ci_95_hi": 0.4632,
+      "ci_overlaps_baseline": false,
+      "fpr_deviation": 0.0997,
+      "fnr_deviation": -0.1395
+    },
+    "Food Processing": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1512,
+      "n_positive": 114,
+      "n_fn": 52,
+      "fpr": 0.0951,
+      "fnr": 0.4561,
+      "fnr_ci_95_lo": 0.3676,
+      "fnr_ci_95_hi": 0.5475,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.0069,
+      "fnr_deviation": -0.0716
+    },
+    "IT/ITES": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1452,
+      "n_positive": 71,
+      "n_fn": 37,
+      "fpr": 0.0391,
+      "fnr": 0.5211,
+      "fnr_ci_95_lo": 0.4069,
+      "fnr_ci_95_hi": 0.6332,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.063,
+      "fnr_deviation": -0.0067
+    },
+    "Manufacturing": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1594,
+      "n_positive": 172,
+      "n_fn": 106,
+      "fpr": 0.0872,
+      "fnr": 0.6163,
+      "fnr_ci_95_lo": 0.5418,
+      "fnr_ci_95_hi": 0.6857,
+      "ci_overlaps_baseline": false,
+      "fpr_deviation": -0.0149,
+      "fnr_deviation": 0.0885
+    },
+    "Pharma": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1546,
+      "n_positive": 99,
+      "n_fn": 71,
+      "fpr": 0.0408,
+      "fnr": 0.7172,
+      "fnr_ci_95_lo": 0.6216,
+      "fnr_ci_95_hi": 0.7965,
+      "ci_overlaps_baseline": false,
+      "fpr_deviation": -0.0613,
+      "fnr_deviation": 0.1894
+    },
+    "Services": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 1533,
+      "n_positive": 149,
+      "n_fn": 85,
+      "fpr": 0.1012,
+      "fnr": 0.5705,
+      "fnr_ci_95_lo": 0.4902,
+      "fnr_ci_95_hi": 0.6472,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.0009,
+      "fnr_deviation": 0.0427
+    },
+    "Textiles": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 1536,
+      "n_positive": 193,
+      "n_fn": 101,
+      "fpr": 0.1258,
+      "fnr": 0.5233,
+      "fnr_ci_95_lo": 0.4531,
+      "fnr_ci_95_hi": 0.5926,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": 0.0238,
+      "fnr_deviation": -0.0045
+    },
+    "Trading": {
+      "status": "fairness flag: review needed",
+      "reliability": "adequate",
+      "n_total": 1398,
+      "n_positive": 181,
+      "n_fn": 77,
+      "fpr": 0.1586,
+      "fnr": 0.4254,
+      "fnr_ci_95_lo": 0.3557,
+      "fnr_ci_95_hi": 0.4983,
+      "ci_overlaps_baseline": false,
+      "fpr_deviation": 0.0565,
+      "fnr_deviation": -0.1024
+    }
+  },
+  "by_region": {
+    "Central": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 3126,
+      "n_positive": 281,
+      "n_fn": 157,
+      "fpr": 0.0921,
+      "fnr": 0.5587,
+      "fnr_ci_95_lo": 0.5003,
+      "fnr_ci_95_hi": 0.6156,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.01,
+      "fnr_deviation": 0.0309
+    },
+    "East": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 3060,
+      "n_positive": 286,
+      "n_fn": 143,
+      "fpr": 0.0955,
+      "fnr": 0.5,
+      "fnr_ci_95_lo": 0.4424,
+      "fnr_ci_95_hi": 0.5576,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.0065,
+      "fnr_deviation": -0.0278
+    },
+    "North": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 2899,
+      "n_positive": 247,
+      "n_fn": 129,
+      "fpr": 0.1044,
+      "fnr": 0.5223,
+      "fnr_ci_95_lo": 0.4601,
+      "fnr_ci_95_hi": 0.5837,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": 0.0024,
+      "fnr_deviation": -0.0055
+    },
+    "South": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 3002,
+      "n_positive": 277,
+      "n_fn": 157,
+      "fpr": 0.1193,
+      "fnr": 0.5668,
+      "fnr_ci_95_lo": 0.5079,
+      "fnr_ci_95_hi": 0.6238,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": 0.0172,
+      "fnr_deviation": 0.039
+    },
+    "West": {
+      "status": "passed",
+      "reliability": "adequate",
+      "n_total": 2847,
+      "n_positive": 313,
+      "n_fn": 155,
+      "fpr": 0.0994,
+      "fnr": 0.4952,
+      "fnr_ci_95_lo": 0.4402,
+      "fnr_ci_95_hi": 0.5503,
+      "ci_overlaps_baseline": true,
+      "fpr_deviation": -0.0026,
+      "fnr_deviation": -0.0326
+    }
+  },
+  "flagged_segments": [
+    {
+      "dimension": "industry",
+      "segment": "Auto Ancillary",
+      "reasons": [
+        "FNR deviation: +14.5%"
+      ],
+      "n_positive": 116,
+      "n_fn": 78,
+      "fpr": 0.0835,
+      "fnr": 0.6724,
+      "fnr_ci_95_lo": 0.5827,
+      "fnr_ci_95_hi": 0.7511,
+      "ci_overlaps_baseline": false,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "Construction",
+      "reasons": [
+        "FPR deviation: +10.0%",
+        "FNR deviation: -14.0%"
+      ],
+      "n_positive": 170,
+      "n_fn": 66,
+      "fpr": 0.2017,
+      "fnr": 0.3882,
+      "fnr_ci_95_lo": 0.3182,
+      "fnr_ci_95_hi": 0.4632,
+      "ci_overlaps_baseline": false,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "Food Processing",
+      "reasons": [
+        "FNR deviation: -7.2%"
+      ],
+      "n_positive": 114,
+      "n_fn": 52,
+      "fpr": 0.0951,
+      "fnr": 0.4561,
+      "fnr_ci_95_lo": 0.3676,
+      "fnr_ci_95_hi": 0.5475,
+      "ci_overlaps_baseline": true,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "IT/ITES",
+      "reasons": [
+        "FPR deviation: -6.3%"
+      ],
+      "n_positive": 71,
+      "n_fn": 37,
+      "fpr": 0.0391,
+      "fnr": 0.5211,
+      "fnr_ci_95_lo": 0.4069,
+      "fnr_ci_95_hi": 0.6332,
+      "ci_overlaps_baseline": true,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "Manufacturing",
+      "reasons": [
+        "FNR deviation: +8.9%"
+      ],
+      "n_positive": 172,
+      "n_fn": 106,
+      "fpr": 0.0872,
+      "fnr": 0.6163,
+      "fnr_ci_95_lo": 0.5418,
+      "fnr_ci_95_hi": 0.6857,
+      "ci_overlaps_baseline": false,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "Pharma",
+      "reasons": [
+        "FPR deviation: -6.1%",
+        "FNR deviation: +18.9%"
+      ],
+      "n_positive": 99,
+      "n_fn": 71,
+      "fpr": 0.0408,
+      "fnr": 0.7172,
+      "fnr_ci_95_lo": 0.6216,
+      "fnr_ci_95_hi": 0.7965,
+      "ci_overlaps_baseline": false,
+      "reliability": "adequate"
+    },
+    {
+      "dimension": "industry",
+      "segment": "Trading",
+      "reasons": [
+        "FPR deviation: +5.7%",
+        "FNR deviation: -10.2%"
+      ],
+      "n_positive": 181,
+      "n_fn": 77,
+      "fpr": 0.1586,
+      "fnr": 0.4254,
+      "fnr_ci_95_lo": 0.3557,
+      "fnr_ci_95_hi": 0.4983,
+      "ci_overlaps_baseline": false,
+      "reliability": "adequate"
+    }
+  ]
+}

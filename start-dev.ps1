@@ -71,7 +71,7 @@ Write-Host "      Installing Python dependencies..." -ForegroundColor Gray
 # Set DATABASE_URL for all subsequent commands
 $env:DATABASE_URL = "postgresql+psycopg://kavach:kavach123@localhost:5432/kavach_db"
 $env:KAVACH_SECRET_KEY = "36eadbd8d997ba82d14837e2bee9de87617b4d9698ea0d06d22c63d5ba9b1143"
-$env:KAVACH_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
+$env:SENTINEL_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
 
 # Run Alembic migrations
 Write-Host "      Running DB migrations..." -ForegroundColor Gray
@@ -96,10 +96,10 @@ $backendJob = Start-Job -ScriptBlock {
     param($dir, $python, $dbUrl, $secret, $origins)
     $env:DATABASE_URL = $dbUrl
     $env:KAVACH_SECRET_KEY = $secret
-    $env:KAVACH_ALLOWED_ORIGINS = $origins
+    $env:SENTINEL_ALLOWED_ORIGINS = $origins
     Set-Location $dir
     & $python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-} -ArgumentList $backendDir, $venvPython, $env:DATABASE_URL, $env:KAVACH_SECRET_KEY, $env:KAVACH_ALLOWED_ORIGINS
+} -ArgumentList $backendDir, $venvPython, $env:DATABASE_URL, $env:KAVACH_SECRET_KEY, $env:SENTINEL_ALLOWED_ORIGINS
 
 Write-Host "      Backend starting (PID job: $($backendJob.Id))..." -ForegroundColor Gray
 Start-Sleep -Seconds 4

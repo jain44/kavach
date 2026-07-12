@@ -73,8 +73,37 @@ def step_feature_engineering():
 
 
 def step_train_models():
+    import hashlib
+    models_dir = BASE_DIR / "models"
+    version_name = f"v_{int(time.time())}"
+    versioned_dir = models_dir / version_name
+    versioned_dir.mkdir(exist_ok=True, parents=True)
+
+    print(f"  Training model version: {version_name} -> {versioned_dir}")
     from ml.train_model import main as train_main
-    return train_main()
+    models, metrics = train_main(versioned_dir)
+
+    # 4. Generate manifest.sha256
+    manifest_path = versioned_dir / "manifest.sha256"
+    lines = []
+    for file_path in sorted(versioned_dir.iterdir()):
+        if file_path.is_file() and file_path.name != "manifest.sha256":
+            sha256 = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                while chunk := f.read(8192):
+                    sha256.update(chunk)
+            lines.append(f"{sha256.hexdigest()}  {file_path.name}\n")
+    with open(manifest_path, "w") as f:
+        f.writelines(lines)
+    print(f"  OK Generated manifest: {manifest_path}")
+
+    # 5. Update current_version.txt
+    current_txt = models_dir / "current_version.txt"
+    with open(current_txt, "w") as f:
+        f.write(version_name + "\n")
+    print(f"  OK Updated current_version.txt pointer to {version_name}")
+
+    return models, metrics
 
 
 if __name__ == "__main__":

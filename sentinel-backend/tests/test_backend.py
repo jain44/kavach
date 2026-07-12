@@ -284,7 +284,7 @@ class TestKavachBackend(unittest.TestCase):
         response = self.client.post("/api/v1/predict/live", json=req_body, headers=headers)
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["confidence_level"], "low — limited history")
+        self.assertEqual(data["confidence_level"], "low — limited history (2mo)")
 
 
 if __name__ == "__main__":

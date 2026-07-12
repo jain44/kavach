@@ -46,10 +46,13 @@ try:
 except Exception as e:
     print(f"  [DB] PostgreSQL connection failed ({e}). Falling back to SQLite local database.")
     # Local SQLite DB fallback for testing and offline execution
-    DATABASE_URL = "sqlite:///./kavach.db"
+    if "sqlite" not in DATABASE_URL:
+        DATABASE_URL = "sqlite:///./kavach.db"
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},  # Required for SQLite concurrency
+        pool_size=60,
+        max_overflow=40,
         echo=False,
     )
 

@@ -11,3 +11,17 @@ __pycache__/
 venv/
 ENV/
 env/
+
+# Scratch / debug scripts (local only)
+scratch/
+
+# Experiment scripts (not part of the app)
+exp*.py
+threshold_analysis.py
+
+# Large log files
+*.log
+
+# SQLite databases
+*.db
+*.sqlite

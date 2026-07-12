@@ -1,0 +1,9 @@
+{
+  "legacy_time_seconds": 10.7895,
+  "fast_time_seconds": 0.6004,
+  "speedup_ratio": 17.97,
+  "num_borrowers": 200,
+  "total_rows": 4800,
+  "parity_verified": true,
+  "timestamp": "2026-07-12T20:01:37.108782"
+}

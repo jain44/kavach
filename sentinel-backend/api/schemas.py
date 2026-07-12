@@ -81,6 +81,7 @@ class PortfolioAccount(BaseModel):
     dscr: float
     bureau_score: int
     as_of_month: str
+    confidence_level: Optional[str] = "high"
 
 
 class GradeDistribution(BaseModel):
@@ -141,6 +142,15 @@ class SegmentBreakdown(BaseModel):
     count: int
 
 
+# ─── Analytics Quarter Comparison ─────────────────────────────────────────────
+
+class QuarterComparisonPoint(BaseModel):
+    segment: str
+    current_q_avg_pd: float
+    prior_q_avg_pd: float
+    delta_pp: float           # percentage-point change
+
+
 class AnalyticsResponse(BaseModel):
     stress_trend: List[TrendPoint]
     loan_type_breakdown: List[SegmentBreakdown]
@@ -150,6 +160,7 @@ class AnalyticsResponse(BaseModel):
     total_accounts: int
     portfolio_avg_stress: float
     high_risk_accounts: int
+    quarter_comparison: Optional[List[QuarterComparisonPoint]] = None
 
 
 # ─── Governance ───────────────────────────────────────────────────────────────
@@ -161,6 +172,14 @@ class SegmentMetrics(BaseModel):
     recall: float
     false_positive_rate: float
     test_n: int
+    auc_roc_ci_2p5: Optional[float] = None
+    auc_roc_ci_97p5: Optional[float] = None
+    precision_at_top10pct_ci_2p5: Optional[float] = None
+    precision_at_top10pct_ci_97p5: Optional[float] = None
+    recall_ci_2p5: Optional[float] = None
+    recall_ci_97p5: Optional[float] = None
+    false_positive_rate_ci_2p5: Optional[float] = None
+    false_positive_rate_ci_97p5: Optional[float] = None
 
 
 class FairnessSegmentResult(BaseModel):
@@ -206,6 +225,14 @@ class FairnessReport(BaseModel):
     flagged_segments: List[FlaggedFairnessSegment]
 
 
+class BacktestPoint(BaseModel):
+    window: str
+    auc: float
+    precision: float
+    recall: float
+    fpr: float
+
+
 class GovernanceResponse(BaseModel):
     model_version: str
     trained_at: str
@@ -223,6 +250,15 @@ class GovernanceResponse(BaseModel):
     audit_log: List[Dict[str, Any]]
     fairness: Optional[FairnessReport] = None
     fairness_status: Optional[str] = None   # human-readable summary logged at startup
+    avg_auc_roc_ci_2p5: Optional[float] = None
+    avg_auc_roc_ci_97p5: Optional[float] = None
+    avg_precision_at_top10_ci_2p5: Optional[float] = None
+    avg_precision_at_top10_ci_97p5: Optional[float] = None
+    avg_recall_ci_2p5: Optional[float] = None
+    avg_recall_ci_97p5: Optional[float] = None
+    avg_false_positive_rate_ci_2p5: Optional[float] = None
+    avg_false_positive_rate_ci_97p5: Optional[float] = None
+    backtest_results: Optional[List[BacktestPoint]] = None
 
 
 # ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -252,24 +288,24 @@ class AlertsResponse(BaseModel):
 # ─── Live Dynamic Predict ─────────────────────────────────────────────────────
 
 class MonthlySnapshotInput(BaseModel):
-    dscr: float = Field(..., ge=0.0, le=20.0, description="Debt Service Coverage Ratio")
-    bureau_score: int = Field(..., ge=300, le=900, description="CIBIL/Bureau score")
-    bureau_enquiries_6m: int = Field(..., ge=0, le=100, description="Bureau enquiries in last 6 months")
-    gst_turnover_lakhs: float = Field(..., ge=0.0, le=100000.0, description="GST turnover in Lakhs")
-    gst_filing_delay_days: int = Field(..., ge=0, le=365, description="GST filing delay in days")
-    gst_filing_missed: int = Field(..., ge=0, le=12, description="GST filing missed months")
-    bank_avg_balance_lakhs: float = Field(..., ge=0.0, le=100000.0, description="Average bank balance in Lakhs")
-    bank_balance_volatility: float = Field(..., ge=0.0, le=5.0, description="Volatility of bank balance")
-    overdraft_utilization_pct: float = Field(..., ge=0.0, le=1.0, description="Overdraft utilization percentage (0.0 to 1.0)")
-    epfo_employee_count: int = Field(..., ge=0, le=100000, description="EPFO employee count")
-    dpd_current: int = Field(..., ge=0, le=999, description="Current Days Past Due")
-    dpd_max_12m: int = Field(..., ge=0, le=999, description="Maximum DPD in last 12 months")
+    dscr: Optional[float] = Field(None, ge=0.0, le=20.0, description="Debt Service Coverage Ratio")
+    bureau_score: Optional[int] = Field(None, ge=300, le=900, description="CIBIL/Bureau score")
+    bureau_enquiries_6m: Optional[int] = Field(None, ge=0, le=100, description="Bureau enquiries in last 6 months")
+    gst_turnover_lakhs: Optional[float] = Field(None, ge=0.0, le=100000.0, description="GST turnover in Lakhs")
+    gst_filing_delay_days: Optional[int] = Field(None, ge=0, le=365, description="GST filing delay in days")
+    gst_filing_missed: Optional[int] = Field(None, ge=0, le=12, description="GST filing missed months")
+    bank_avg_balance_lakhs: Optional[float] = Field(None, ge=0.0, le=100000.0, description="Average bank balance in Lakhs")
+    bank_balance_volatility: Optional[float] = Field(None, ge=0.0, le=5.0, description="Volatility of bank balance")
+    overdraft_utilization_pct: Optional[float] = Field(None, ge=0.0, le=1.0, description="Overdraft utilization percentage (0.0 to 1.0)")
+    epfo_employee_count: Optional[int] = Field(None, ge=0, le=100000, description="EPFO employee count")
+    dpd_current: Optional[int] = Field(None, ge=0, le=999, description="Current Days Past Due")
+    dpd_max_12m: Optional[int] = Field(None, ge=0, le=999, description="Maximum DPD in last 12 months")
     # NLP / Unstructured
-    gst_remark_sentiment_score: float = Field(..., ge=-1.0, le=1.0, description="GST sentiment score (-1 to 1)")
-    transaction_anomaly_score: float = Field(..., ge=0.0, le=1.0, description="Transaction anomaly score (0 to 1)")
-    litigation_flag: int = Field(..., ge=0, le=1, description="Litigation flag (0 or 1)")
-    litigation_severity: int = Field(..., ge=0, le=2, description="Litigation severity class (0, 1, or 2)")
-    news_sentiment_score: float = Field(..., ge=-1.0, le=1.0, description="News sentiment score (-1 to 1)")
+    gst_remark_sentiment_score: Optional[float] = Field(None, ge=-1.0, le=1.0, description="GST sentiment score (-1 to 1)")
+    transaction_anomaly_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Transaction anomaly score (0 to 1)")
+    litigation_flag: Optional[int] = Field(None, ge=0, le=1, description="Litigation flag (0 or 1)")
+    litigation_severity: Optional[int] = Field(None, ge=0, le=2, description="Litigation severity class (0, 1, or 2)")
+    news_sentiment_score: Optional[float] = Field(None, ge=-1.0, le=1.0, description="News sentiment score (-1 to 1)")
 
 
 class LivePredictRequest(BaseModel):
@@ -286,4 +322,37 @@ class LivePredictResponse(BaseModel):
     narrative_summary: str
     model_version: str
     confidence_level: Optional[str] = "high"
+
+
+# ─── Account History ──────────────────────────────────────────────────────────
+
+class AccountHistoryPoint(BaseModel):
+    month: str              # "YYYY-MM"
+    month_index: int
+    stress_score: float
+    pd_probability: float
+    risk_grade: str
+
+
+class AccountHistoryResponse(BaseModel):
+    borrower_id: str
+    history: List[AccountHistoryPoint]
+
+
+# ─── Account Notes ────────────────────────────────────────────────────────────
+
+class AccountNoteIn(BaseModel):
+    note_text: str
+
+
+class AccountNoteOut(BaseModel):
+    id: int
+    note_text: str
+    created_by: str
+    created_at: str
+
+
+class AccountNotesResponse(BaseModel):
+    borrower_id: str
+    notes: List[AccountNoteOut]
 

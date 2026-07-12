@@ -185,3 +185,18 @@ class AlertRecord(Base):
     def __repr__(self):
         return f"<AlertRecord {self.alert_id} {self.severity}>"
 
+
+# ─── Account Notes (RM Follow-up) ─────────────────────────────────────────────
+
+class AccountNote(Base):
+    __tablename__ = "account_notes"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    borrower_id = Column(String(32), ForeignKey("borrower_profiles.borrower_id", ondelete="CASCADE"), nullable=False, index=True)
+    note_text   = Column(Text, nullable=False)
+    created_by  = Column(String(64), default="rm", nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<AccountNote {self.borrower_id} by {self.created_by}>"
+

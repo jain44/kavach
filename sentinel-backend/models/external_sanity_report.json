@@ -1,0 +1,9 @@
+{
+    "dataset": "UCI German Credit",
+    "rows": 1000,
+    "features": 48,
+    "test_auc": 0.7947619047619048,
+    "selected_threshold": 0.63,
+    "recall_at_threshold": 0.5833333236111113,
+    "fpr_at_threshold": 0.14999999892857144
+}

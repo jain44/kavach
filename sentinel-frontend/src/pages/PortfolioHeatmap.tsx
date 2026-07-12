@@ -20,6 +20,9 @@ export default function PortfolioHeatmap() {
   const [minStress, setMinStress] = useState<number | undefined>()
   const [search, setSearch]     = useState('')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+  const [industry, setIndustry] = useState('All')
+  const [region, setRegion]     = useState('All')
+  const [deltaFilter, setDeltaFilter] = useState<'all' | 'worsened' | 'improved'>('all')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -35,9 +38,14 @@ export default function PortfolioHeatmap() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const accounts: any[] = (data?.accounts ?? []).filter((a: any) =>
-    !search ||
-    a.borrower_id.toLowerCase().includes(search.toLowerCase()) ||
-    (a.business_name ?? '').toLowerCase().includes(search.toLowerCase())
+    (!search ||
+      a.borrower_id.toLowerCase().includes(search.toLowerCase()) ||
+      (a.business_name ?? '').toLowerCase().includes(search.toLowerCase())) &&
+    (industry === 'All' || a.industry === industry) &&
+    (region === 'All' || a.region === region) &&
+    (deltaFilter === 'all' ||
+      (deltaFilter === 'worsened' && (a.stress_score_delta ?? 0) > 0) ||
+      (deltaFilter === 'improved' && (a.stress_score_delta ?? 0) < 0))
   )
 
   const gradeDist   = data?.grade_distribution ?? []
@@ -144,7 +152,7 @@ export default function PortfolioHeatmap() {
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
         {/* Search */}
-        <div style={{ position:'relative', flex:'1', minWidth:200, maxWidth:280 }}>
+        <div style={{ position:'relative', flex:'1', minWidth:200, maxWidth:240 }}>
           <Search size={13} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
           <input
             className="input-field"
@@ -164,8 +172,49 @@ export default function PortfolioHeatmap() {
           ))}
         </div>
 
+        {/* Industry Filter Dropdown */}
+        <select
+          value={industry}
+          onChange={e => setIndustry(e.target.value)}
+          style={{
+            fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+            borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', outline: 'none'
+          }}
+        >
+          <option value="All">All Industries</option>
+          {Array.from(new Set((data?.accounts ?? []).map((a: any) => a.industry))).filter(Boolean).map(ind => (
+            <option key={ind as string} value={ind as string}>{ind as string}</option>
+          ))}
+        </select>
+
+        {/* Region Filter Dropdown */}
+        <select
+          value={region}
+          onChange={e => setRegion(e.target.value)}
+          style={{
+            fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+            borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', outline: 'none'
+          }}
+        >
+          <option value="All">All Regions</option>
+          {Array.from(new Set((data?.accounts ?? []).map((a: any) => a.region))).filter(Boolean).map(reg => (
+            <option key={reg as string} value={reg as string}>{reg as string}</option>
+          ))}
+        </select>
+
         {/* Spacer */}
         <div style={{ flex:1 }} />
+
+        {/* MoM Delta Toggle */}
+        <button
+          onClick={() => setDeltaFilter(p => p === 'worsened' ? 'all' : 'worsened')}
+          className={`filter-pill ${deltaFilter==='worsened'?'active':''}`}
+          style={{ display:'flex', alignItems:'center', gap:5 }}
+        >
+          <TrendingUp size={11} /> Worsened MoM Only
+        </button>
 
         {/* High-risk toggle */}
         <button
@@ -232,7 +281,12 @@ function TableView({ accounts, onSelect, getDelta }: { accounts:any[]; onSelect:
               return (
                 <tr key={acc.borrower_id} onClick={() => onSelect(acc.borrower_id)}>
                   <td>
-                    <div style={{ fontWeight:600, color:'var(--text-primary)', fontSize:'0.82rem' }}>{acc.borrower_id}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontWeight:600, color:'var(--text-primary)', fontSize:'0.82rem' }}>{acc.borrower_id}</div>
+                      {acc.confidence_level && acc.confidence_level.includes('limited') && (
+                        <span style={{ fontSize: '0.62rem', background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.22)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>NTC</span>
+                      )}
+                    </div>
                     {acc.business_name && <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginTop:1 }}>{acc.business_name}</div>}
                   </td>
                   <td>
@@ -311,6 +365,9 @@ function GridView({ accounts, onSelect }: { accounts:any[]; onSelect:(id:string)
           >
             {isHigh && (
               <div className="pulse-dot" style={{ background:color, position:'absolute', top:6, right:6 }} />
+            )}
+            {acc.confidence_level && acc.confidence_level.includes('limited') && (
+              <div style={{ fontSize: '0.52rem', background: 'rgba(249,115,22,0.15)', color: '#f97316', padding: '0px 3px', borderRadius: 2, position: 'absolute', top: 6, left: 6, fontWeight: 700 }}>NTC</div>
             )}
             <div style={{ fontFamily:'Space Grotesk,sans-serif', fontWeight:700, fontSize:'0.78rem', color }}>{acc.risk_grade}</div>
             <div>

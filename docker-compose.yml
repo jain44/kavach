@@ -33,7 +33,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://kavach:kavach123@postgres:5432/kavach_db
       KAVACH_SECRET_KEY: 36eadbd8d997ba82d14837e2bee9de87617b4d9698ea0d06d22c63d5ba9b1143
-      KAVACH_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:80
+      SENTINEL_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:80
     ports:
       - "8000:8000"
     volumes:
