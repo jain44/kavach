@@ -372,12 +372,29 @@ def main():
         # Check if database has already been seeded to avoid boot timeouts
         try:
             user_count = db.query(User).count()
+            profile_count = db.query(BorrowerProfile).count()
             pred_count = db.query(Prediction).count()
-            if user_count > 0 and pred_count > 0:
-                print("  [SEED] Database already contains records. Skipping seed process.")
+            snapshot_count = db.query(MonthlySnapshot).count()
+            explanation_count = db.query(Explanation).count()
+            model_version_count = db.query(ModelVersion).count()
+            core_tables_ready = all([
+                user_count > 0,
+                profile_count > 0,
+                pred_count > 0,
+                snapshot_count > 0,
+                explanation_count > 0,
+                model_version_count > 0,
+            ])
+            if core_tables_ready:
+                print("  [SEED] Core database tables already contain records. Skipping seed process.")
                 return
             else:
-                print(f"  [SEED] Database incomplete (Users: {user_count}, Predictions: {pred_count}). Seeding data...")
+                print(
+                    "  [SEED] Database incomplete "
+                    f"(Users: {user_count}, Profiles: {profile_count}, Predictions: {pred_count}, "
+                    f"Snapshots: {snapshot_count}, Explanations: {explanation_count}, "
+                    f"ModelVersions: {model_version_count}). Seeding data..."
+                )
         except Exception as e:
             print(f"  [SEED] Could not query database tables: {e}. Proceeding with seed.")
 

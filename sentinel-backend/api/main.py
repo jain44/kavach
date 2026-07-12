@@ -957,7 +957,7 @@ def analytics(db: Session = Depends(get_db), _user: dict = Depends(get_current_u
 @app.get("/api/v1/governance", response_model=GovernanceResponse, tags=["Governance"])
 def governance(
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles(["cro", "compliance"]))
+    _user: dict = Depends(require_roles(["cro", "compliance", "risk_officer"]))
 ):
     if not _metrics_doc:
         raise HTTPException(status_code=503, detail="Model metrics not available.")
