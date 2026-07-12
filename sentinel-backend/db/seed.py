@@ -49,6 +49,14 @@ def _safe_int(val, default=0) -> int:
         return default
 
 
+
+def _csv_row_count(filename: str) -> int:
+    path = DATA_DIR / filename
+    if not path.exists():
+        return 0
+    with open(path, "r", encoding="utf-8") as f:
+        return max(sum(1 for _ in f) - 1, 0)
+
 def _safe_float(val, default=0.0) -> float:
     try:
         v = float(val)
@@ -369,7 +377,13 @@ def main():
 
     db = SessionLocal()
     try:
-        # Check if database has already been seeded to avoid boot timeouts
+        # Backfill only missing/incomplete tables. This avoids re-upserting large tables on Render restarts.
+        t0 = time.time()
+        expected_profiles = _csv_row_count("borrower_profiles.csv")
+        expected_predictions = _csv_row_count("predictions.csv")
+        expected_explanations = _csv_row_count("explanations.csv")
+        expected_snapshots = _csv_row_count("monthly_snapshots.csv")
+
         try:
             user_count = db.query(User).count()
             profile_count = db.query(BorrowerProfile).count()
@@ -377,36 +391,61 @@ def main():
             snapshot_count = db.query(MonthlySnapshot).count()
             explanation_count = db.query(Explanation).count()
             model_version_count = db.query(ModelVersion).count()
-            core_tables_ready = all([
-                user_count > 0,
-                profile_count > 0,
-                pred_count > 0,
-                snapshot_count > 0,
-                explanation_count > 0,
-                model_version_count > 0,
-            ])
-            if core_tables_ready:
-                print("  [SEED] Core database tables already contain records. Skipping seed process.")
-                return
-            else:
-                print(
-                    "  [SEED] Database incomplete "
-                    f"(Users: {user_count}, Profiles: {profile_count}, Predictions: {pred_count}, "
-                    f"Snapshots: {snapshot_count}, Explanations: {explanation_count}, "
-                    f"ModelVersions: {model_version_count}). Seeding data..."
-                )
+            audit_count = db.query(AuditLog).count()
+            alert_count = db.query(AlertRecord).count()
         except Exception as e:
-            print(f"  [SEED] Could not query database tables: {e}. Proceeding with seed.")
+            print(f"  [SEED] Could not query database tables: {e}. Proceeding with full seed.")
+            user_count = profile_count = pred_count = snapshot_count = explanation_count = 0
+            model_version_count = audit_count = alert_count = 0
 
-        t0 = time.time()
-        seed_users(db)
-        seed_model_versions(db)
-        seed_borrower_profiles(db)
-        seed_predictions(db)
-        seed_explanations(db)
-        seed_snapshots(db)
-        seed_audit_logs(db)
-        seed_alerts(db)
+        print(
+            "  [SEED] Current counts "
+            f"(Users: {user_count}, Profiles: {profile_count}/{expected_profiles}, "
+            f"Predictions: {pred_count}/{expected_predictions}, Snapshots: {snapshot_count}/{expected_snapshots}, "
+            f"Explanations: {explanation_count}/{expected_explanations}, ModelVersions: {model_version_count}, "
+            f"AuditLogs: {audit_count}, Alerts: {alert_count})"
+        )
+
+        did_work = False
+        if user_count == 0:
+            seed_users(db); did_work = True
+        else:
+            print("\n[1/8] Users already seeded. Skipping.")
+
+        if model_version_count == 0:
+            seed_model_versions(db); did_work = True
+        else:
+            print("\n[2/8] Model version already seeded. Skipping.")
+
+        if expected_profiles and profile_count < expected_profiles:
+            seed_borrower_profiles(db); did_work = True
+        else:
+            print("\n[3/8] Borrower profiles already complete. Skipping.")
+
+        if expected_predictions and pred_count < expected_predictions:
+            seed_predictions(db); did_work = True
+        else:
+            print("\n[4/8] Predictions already complete. Skipping.")
+
+        if expected_explanations and explanation_count < expected_explanations:
+            seed_explanations(db); did_work = True
+        else:
+            print("\n[5/8] Explanations already complete. Skipping.")
+
+        if expected_snapshots and snapshot_count < expected_snapshots:
+            seed_snapshots(db); did_work = True
+        else:
+            print("\n[6/8] Monthly snapshots already complete. Skipping.")
+
+        if audit_count == 0:
+            seed_audit_logs(db); did_work = True
+        else:
+            print("\n[7/8] Audit logs already seeded. Skipping.")
+
+        if did_work or alert_count == 0:
+            seed_alerts(db)
+        else:
+            print("\n[8/8] Alerts already seeded. Skipping.")
         elapsed = time.time() - t0
         print(f"\n{'=' * 60}")
         print(f"  Seed complete in {elapsed:.1f}s")
