@@ -123,9 +123,9 @@ def seed_borrower_profiles(db: Session):
     df = pd.read_csv(csv_path)
     print(f"    Loaded {len(df):,} profiles from CSV.")
 
-    profiles_list = []
-    for _, row in df.iterrows():
-        profiles_list.append({
+    records = df.to_dict('records')
+    profiles_list = [
+        {
             "borrower_id": str(row["borrower_id"]),
             "business_name": str(row.get("business_name", "")),
             # Application-level encryption (Fernet)
@@ -138,7 +138,9 @@ def seed_borrower_profiles(db: Session):
             "vintage_years": _safe_float(row.get("vintage_years")),
             "employee_count_initial": _safe_int(row.get("employee_count_initial")),
             "created_at": datetime.utcnow()
-        })
+        }
+        for row in records
+    ]
     upserted = bulk_upsert(db, BorrowerProfile, profiles_list, ["borrower_id"])
     print(f"    BorrowerProfile: {upserted} records seeded/updated.")
 
@@ -153,9 +155,9 @@ def seed_predictions(db: Session):
     df = pd.read_csv(csv_path)
     print(f"    Loaded {len(df):,} predictions from CSV.")
 
-    preds_list = []
-    for _, row in df.iterrows():
-        preds_list.append({
+    records = df.to_dict('records')
+    preds_list = [
+        {
             "borrower_id": str(row["borrower_id"]),
             "month_index": _safe_int(row["month_index"]),
             "as_of_month": str(row["as_of_month"]),
@@ -165,7 +167,9 @@ def seed_predictions(db: Session):
             "risk_grade": str(row["risk_grade"]),
             "model_version_id": "v1.0.0",
             "created_at": datetime.utcnow()
-        })
+        }
+        for row in records
+    ]
     upserted = bulk_upsert(db, Prediction, preds_list, ["borrower_id", "month_index"])
     print(f"    Prediction: {upserted} records seeded/updated.")
 
@@ -180,13 +184,15 @@ def seed_explanations(db: Session):
     df = pd.read_csv(csv_path)
     print(f"    Loaded {len(df):,} explanations from CSV.")
 
-    exps_list = []
-    for _, row in df.iterrows():
-        exps_list.append({
+    records = df.to_dict('records')
+    exps_list = [
+        {
             "borrower_id": str(row["borrower_id"]),
             "reason_codes": str(row["reason_codes"]),
             "created_at": datetime.utcnow()
-        })
+        }
+        for row in records
+    ]
     upserted = bulk_upsert(db, Explanation, exps_list, ["borrower_id"])
     print(f"    Explanation: {upserted} records seeded/updated.")
 
@@ -201,9 +207,9 @@ def seed_snapshots(db: Session):
     df = pd.read_csv(csv_path)
     print(f"    Loaded {len(df):,} snapshots from CSV.")
 
-    snaps_list = []
-    for _, row in df.iterrows():
-        snaps_list.append({
+    records = df.to_dict('records')
+    snaps_list = [
+        {
             "borrower_id": str(row["borrower_id"]),
             "as_of_month": str(row["as_of_month"]),
             "month_index": _safe_int(row["month_index"]),
@@ -228,7 +234,9 @@ def seed_snapshots(db: Session):
             "news_sentiment_score": _safe_float(row.get("news_sentiment_score")),
             "label_default_12m": _safe_int(row.get("label_default_12m")),
             "is_defaulter": _safe_int(row.get("_is_defaulter", row.get("is_defaulter", 0)))
-        })
+        }
+        for row in records
+    ]
     upserted = bulk_upsert(db, MonthlySnapshot, snaps_list, ["borrower_id", "month_index"])
     print(f"    MonthlySnapshot: {upserted} records seeded/updated.")
 
