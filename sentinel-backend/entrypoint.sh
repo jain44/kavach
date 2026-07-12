@@ -1,6 +1,6 @@
 #!/bin/sh
 # Kavach Backend Entrypoint
-# Runs Alembic migrations then seeds DB before starting the API server
+# Runs Alembic migrations, then starts the API server.
 
 set -e
 
@@ -11,10 +11,12 @@ echo "Database: $DATABASE_URL"
 echo "[1/3] Running database migrations..."
 alembic upgrade head
 
-# Seed/backfill the database in the background so Render sees an open port quickly.
-# The seed script is idempotent and only fills missing/incomplete tables.
-echo "[2/3] Starting database seed/backfill in background..."
-python -m db.seed &
+if [ "${RUN_SEED_ON_STARTUP:-0}" = "1" ]; then
+    echo "[2/3] Running database seed/backfill..."
+    python -m db.seed
+else
+    echo "[2/3] Skipping seed/backfill on startup (set RUN_SEED_ON_STARTUP=1 to enable)"
+fi
 
 # Start FastAPI server
 echo "[3/3] Starting Uvicorn server..."

@@ -14,20 +14,8 @@ import json
 import warnings
 import numpy as np
 import pandas as pd
-import joblib
-import shap
 from pathlib import Path
 from datetime import datetime
-from sklearn.model_selection import GroupShuffleSplit
-from sklearn.metrics import (
-    roc_auc_score, precision_score, recall_score, f1_score,
-    confusion_matrix, average_precision_score
-)
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import LabelEncoder
-import xgboost as xgb
-
-
 # ─── Isotonic Calibration Wrapper ─────────────────────────────────────────────
 
 class _SHAPEstimatorWrapper:
@@ -221,7 +209,9 @@ def time_based_split(df: pd.DataFrame):
 
 def train_segment_model(train_df: pd.DataFrame, val_df: pd.DataFrame, loan_type: str):
     """Trains a calibrated XGBoost model for a specific loan type segment."""
+    import xgboost as xgb
     from sklearn.isotonic import IsotonicRegression
+    from sklearn.metrics import roc_auc_score
 
     # XGBoost natively handles NaN — preserve missingness as a signal.
     X_train = train_df[FEATURE_COLS]  # no fillna
@@ -337,6 +327,7 @@ def compute_shap_explanations(model, X: pd.DataFrame, top_n: int = 5) -> list:
             base_model = model
     
     try:
+        import shap
         explainer = shap.TreeExplainer(base_model)
         shap_vals = explainer.shap_values(X)
         # Handle both old (list) and new (array) SHAP return formats
@@ -394,7 +385,7 @@ def tune_threshold(model, X_val: pd.DataFrame, y_val: pd.Series,
     the one with the highest recall while keeping FPR at or below the constraint.
     Falls back to 0.20 if no threshold satisfies the FPR constraint.
     """
-    from sklearn.metrics import precision_recall_curve, roc_curve
+    from sklearn.metrics import precision_recall_curve, roc_curve, confusion_matrix
 
     val_probs = model.predict_proba(X_val)[:, 1]
 
@@ -440,6 +431,10 @@ def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series, loan_type: st
     in training months), falls back to val-set metrics for precision/recall/FPR.
     AUC is still computed on the test set via probability ranking.
     """
+    from sklearn.metrics import (
+        roc_auc_score, precision_score, recall_score, f1_score,
+        confusion_matrix, average_precision_score,
+    )
     probs = model.predict_proba(X_test)[:, 1]
     preds = (probs >= CLASSIFICATION_THRESHOLD).astype(int)  # FIX 3
 
@@ -716,6 +711,8 @@ def compute_fairness_report(models: dict, test_df: pd.DataFrame) -> dict:
 # ─── Main Training Pipeline ───────────────────────────────────────────────────
 
 def main(output_dir: Path = None):
+    import joblib
+    from sklearn.metrics import roc_auc_score
     print("=" * 60)
     print("  Kavach -- Model Training Pipeline")
     print("=" * 60)
