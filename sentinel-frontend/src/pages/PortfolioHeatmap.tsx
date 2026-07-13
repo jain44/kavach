@@ -23,6 +23,7 @@ export default function PortfolioHeatmap() {
   const [industry, setIndustry] = useState('All')
   const [region, setRegion]     = useState('All')
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'worsened' | 'improved'>('all')
+  const [sortMode, setSortMode] = useState<'stress_desc' | 'stress_asc' | 'grade' | 'pd_desc'>('grade')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -37,6 +38,8 @@ export default function PortfolioHeatmap() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  const GRADE_RANK: Record<string,number> = { AAA:0, AA:1, A:2, BBB:3, BB:4, B:5, C:6, D:7 }
+
   const accounts: any[] = (data?.accounts ?? []).filter((a: any) =>
     (!search ||
       a.borrower_id.toLowerCase().includes(search.toLowerCase()) ||
@@ -46,7 +49,14 @@ export default function PortfolioHeatmap() {
     (deltaFilter === 'all' ||
       (deltaFilter === 'worsened' && (a.stress_score_delta ?? 0) > 0) ||
       (deltaFilter === 'improved' && (a.stress_score_delta ?? 0) < 0))
-  )
+  ).sort((a: any, b: any) => {
+    if (sortMode === 'stress_desc') return b.stress_score - a.stress_score
+    if (sortMode === 'stress_asc')  return a.stress_score - b.stress_score
+    if (sortMode === 'pd_desc')     return b.pd_probability - a.pd_probability
+    // 'grade' — sort by grade ascending (AAA first), then stress descending within grade
+    const gd = (GRADE_RANK[a.risk_grade] ?? 9) - (GRADE_RANK[b.risk_grade] ?? 9)
+    return gd !== 0 ? gd : b.stress_score - a.stress_score
+  })
 
   const gradeDist   = data?.grade_distribution ?? []
   const totalAccounts = data?.total_accounts ?? 0
@@ -202,6 +212,22 @@ export default function PortfolioHeatmap() {
           {Array.from(new Set((data?.accounts ?? []).map((a: any) => a.region))).filter(Boolean).map(reg => (
             <option key={reg as string} value={reg as string}>{reg as string}</option>
           ))}
+        </select>
+
+        {/* Sort Dropdown */}
+        <select
+          value={sortMode}
+          onChange={e => setSortMode(e.target.value as any)}
+          style={{
+            fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+            borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', outline: 'none'
+          }}
+        >
+          <option value="grade">Sort: By Grade (AAA → D)</option>
+          <option value="stress_desc">Sort: Highest Stress First</option>
+          <option value="stress_asc">Sort: Lowest Stress First</option>
+          <option value="pd_desc">Sort: Highest PD First</option>
         </select>
 
         {/* Spacer */}
