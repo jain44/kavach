@@ -1,6 +1,6 @@
-# Kavach: MSME Early Warning Default Prediction System
+# Sentinel: MSME Early Warning Default Prediction System
 
-Kavach is a comprehensive, production-grade early warning system for predicting Defaults in Micro, Small, and Medium Enterprises (MSMEs), developed for IDBI Innovate 2026. 
+Sentinel is a comprehensive, production-grade early warning system for predicting Defaults in Micro, Small, and Medium Enterprises (MSMEs), developed for IDBI Innovate 2026. 
 
 It implements a calibrated Machine Learning scoring backend (utilizing XGBoost with Isotonic Calibration and SHAP reason codes) coupled with a modern React SPA dashboard and a persistent PostgreSQL database layer.
 
@@ -8,7 +8,7 @@ It implements a calibrated Machine Learning scoring backend (utilizing XGBoost w
 
 ## 🏗️ Architecture & Stack
 
-Kavach utilizes a modern full-stack decoupled architecture:
+Sentinel utilizes a modern full-stack decoupled architecture:
 
 ```
                   ┌────────────────────────────────────────┐
@@ -38,7 +38,7 @@ Kavach utilizes a modern full-stack decoupled architecture:
 ## 📂 Project Structure
 
 ```
-Kavach/
+Sentinel/
 ├── sentinel-backend/         # FastAPI backend
 │   ├── alembic/              # Database migration scripts
 │   ├── api/                  # API endpoints, routers, and schemas
@@ -69,9 +69,15 @@ Kavach/
 
 ---
 
-## 🚀 Setup & Execution
+## Deployed App
 
-You can run Kavach locally using three different methods depending on your preferences.
+Latest frontend deployment: [https://kavach-gules.vercel.app/](https://kavach-gules.vercel.app/)
+
+---
+
+## Setup & Execution
+
+You can run Sentinel locally using three different methods depending on your preferences.
 
 ### Option A: PowerShell Quickstart (Recommended for Windows)
 
@@ -133,7 +139,19 @@ docker-compose up --build
 
 ---
 
-## 🔑 Demo Logins
+## Verified Demo Values
+
+- Target borrower: `MSME00231`
+- Current stress / grade: `82.0 / C`
+- Current PD: `35.96%`
+- What-if sliders: `DPD -30 days`, `DSCR +0.50`
+- Simulated stress / grade: `65.93 / B`
+- Governance AUC-ROC: `0.743`
+- Governance Precision @ Top 10%: `38.87%`
+
+---
+
+## Demo Logins
 
 All demo accounts share the password: **`kavach123`**
 
@@ -160,7 +178,7 @@ All demo accounts share the password: **`kavach123`**
 
 ## 💼 Business Case, Competitive Landscape & Regulatory Alignment (Phase 5)
 
-This section presents the real cost-benefit analysis, competitive positioning, and regulatory compliance alignment for Sentinel (Kavach), custom-tailored to IDBI Bank's financial disclosures and the latest Reserve Bank of India (RBI) mandates.
+This section presents the real cost-benefit analysis, competitive positioning, and regulatory compliance alignment for Sentinel, custom-tailored to IDBI Bank's financial disclosures and the latest Reserve Bank of India (RBI) mandates.
 
 ### 1. Real Cost-Benefit / ROI Model
 Using IDBI Bank’s actual public financial disclosures as of **December 31, 2025 (Q3 FY2026)**, the bank's net advances stand at **₹2,38,786 crore**, with the active MSME segment advances portfolio valued at **₹22,826 crore**.
@@ -188,7 +206,7 @@ The table below illustrates a transparent, spreadsheet-style ROI model estimatin
 ### 2. Competitive Landscape Refresh
 A comparative evaluation of Sentinel against current offerings in the Indian MSME credit scoring and lending space (CRIF High Mark, Jocata, and Perfios) reveals distinct strategic positioning.
 
-| Feature / Dimension | Sentinel (Kavach) | CRIF High Mark (CIBR) | Jocata (SWARA) | Perfios (KScan AI) |
+| Feature / Dimension | Sentinel | CRIF High Mark (CIBR) | Jocata (SWARA) | Perfios (KScan AI) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Core Focus** | **Post-Sanction Portfolio Monitoring** | Credit Evaluation at Origination | Automated Onboarding / Sourcing | Intelligence Layer & Data Extraction |
 | **Primary Data Source** | Multimodal: Daily CC/OD Balances + GST Lags + EPFO Trends + Legal | Historical Repayment Records (Bureau Database) | Tax Filings (GST) + Bank Statement Analyzer | Verified Public Documents (900+ Registries) |

@@ -178,7 +178,7 @@ export default function AccountDetail() {
           <form onSubmit={handleSearch} style={{ display:'flex', gap:8 }}>
             <div style={{ position:'relative' }}>
               <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-              <input className="input-field" style={{ paddingLeft:32, width:200, fontSize:'0.82rem' }} placeholder="e.g. MSME00042" value={inputId} onChange={e=>setInputId(e.target.value)} />
+              <input className="input-field" style={{ paddingLeft:32, width:200, fontSize:'0.82rem' }} placeholder="e.g. MSME00231" value={inputId} onChange={e=>setInputId(e.target.value)} />
             </div>
             <button type="submit" className="btn-primary">Lookup</button>
           </form>
@@ -194,7 +194,7 @@ export default function AccountDetail() {
           </div>
           <div style={{ textAlign:'center' }}>
             <div style={{ fontWeight:600, color:'var(--text-primary)', marginBottom:4 }}>Search a borrower</div>
-            <div style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>Enter an ID like <span style={{ fontFamily:'JetBrains Mono,monospace', color:'var(--text-secondary)' }}>MSME00042</span> to view their full profile</div>
+            <div style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>Enter an ID like <span style={{ fontFamily:'JetBrains Mono,monospace', color:'var(--text-secondary)' }}>MSME00231</span> to view their full profile</div>
           </div>
         </motion.div>
       )}

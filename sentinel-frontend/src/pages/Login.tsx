@@ -678,7 +678,7 @@ export default function LoginPage() {
                 <path fill="none" stroke="#24201b" strokeWidth="5" strokeLinejoin="round" d="M38 24 54 30v11c0 10.3-6.1 17.4-16 21.5C28.1 58.4 22 51.3 22 41V30l16-6Z" />
               </svg>
               <div>
-                <div className="brand-title">KAVACH</div>
+                <div className="brand-title">Sentinel</div>
                 <div className="brand-subtitle">IDBI Innovate 2026</div>
               </div>
             </div>
@@ -690,10 +690,10 @@ export default function LoginPage() {
 
           <section className="metrics" aria-label="Performance metrics">
             <div className="metrics-title">PERFORMANCE METRICS</div>
-            <MetricRow name="AUC-ROC"            value="0.7894"    note="honest baseline: 0.65" />
-            <MetricRow name="Precision @ Top 10%" value="39.2%"     note="baseline: 21.0%" />
+            <MetricRow name="AUC-ROC"            value="0.743"      note="honest baseline: 0.65" />
+            <MetricRow name="Precision @ Top 10%" value="38.87%"    note="baseline: 21.0%" />
             <MetricRow name="Alert Lead Time"     value="12 months" note="vs. reactive baseline: 1 month" />
-            <MetricRow name="Accuracy Lift"       value="+1.8x"     note="over 20.8% default rate" />
+            <MetricRow name="Accuracy Lift"       value="+1.85x"    note="over 21.0% baseline precision" />
           </section>
         </aside>
 
@@ -704,7 +704,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="login" aria-label="Sign in">
             <h2>Sign In</h2>
-            <p className="login-subtitle">Select your role to access Kavach</p>
+            <p className="login-subtitle">Select your role to access Sentinel</p>
 
             <label htmlFor="role">ROLE</label>
             <div style={{ position: 'relative' }}>
@@ -787,7 +787,7 @@ export default function LoginPage() {
       </div>
 
       <footer className="footer">
-        © 2026 IDBI Innovate — Track 04: MSME Credit Risk | Kavach is a service mark of IDBI Bank Ltd. | <a href="#support">Contact Support</a>
+        © 2026 IDBI Innovate — Track 04: MSME Credit Risk | Sentinel Early Warning System | <a href="#support">Contact Support</a>
       </footer>
     </>
   )

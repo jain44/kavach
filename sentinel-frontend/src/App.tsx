@@ -81,7 +81,7 @@ const AppRoutes = () => {
       <div className="min-h-screen flex items-center justify-center gradient-bg">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'rgba(245,158,11,0.3)', borderTopColor: '#f59e0b' }} />
-          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading Kavach...</div>
+          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading Sentinel...</div>
         </div>
       </div>
     )

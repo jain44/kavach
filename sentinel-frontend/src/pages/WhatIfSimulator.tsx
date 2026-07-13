@@ -17,23 +17,27 @@ const SLIDERS = [
   { key:'epfo_change_pct',           label:'Workforce Change',      desc:'Employee headcount change (%)',           min:-0.5, max:0.5,  step:0.05, fmt:(v:number)=>`${v>=0?'+':''}${(v*100).toFixed(0)}%`, positiveIsBad:false },
 ]
 
-const defaults = Object.fromEntries(SLIDERS.map(s => [s.key, 0]))
+const defaults: Record<string, number> = Object.fromEntries(SLIDERS.map(s => [s.key, 0]))
+const DEMO_BORROWER_ID = 'MSME00231'
+const DEMO_CHANGES: Record<string, number> = { ...defaults, dscr_delta: 0.5, dpd_change: -30 }
 
 export default function WhatIfSimulator() {
   const [searchParams] = useSearchParams()
-  const [borrowerId, setBorrowerId] = useState(searchParams.get('id') ?? '')
-  const [inputId, setInputId]       = useState(searchParams.get('id') ?? '')
+  const initialBorrowerId = searchParams.get('id') ?? ''
+  const [borrowerId, setBorrowerId] = useState(initialBorrowerId)
+  const [inputId, setInputId]       = useState(initialBorrowerId)
   const [original, setOriginal]     = useState<any>(null)
   const [result, setResult]         = useState<any>(null)
-  const [changes, setChanges]       = useState<Record<string, number>>(defaults)
+  const [changes, setChanges]       = useState<Record<string, number>>(initialBorrowerId === DEMO_BORROWER_ID ? DEMO_CHANGES : defaults)
   const [simulating, setSimulating] = useState(false)
+  const [error, setError]           = useState('')
   const [loadingOrig, setLoadingOrig] = useState(false)
 
   const loadOriginal = async (bid: string) => {
     if (!bid) return
-    setLoadingOrig(true); setResult(null)
+    setLoadingOrig(true); setResult(null); setError('')
     try { setOriginal(await predict(bid)) }
-    catch { /* ignore */ }
+    catch (err: any) { setError(err?.response?.data?.detail ?? 'Could not load borrower') }
     finally { setLoadingOrig(false) }
   }
 
@@ -41,18 +45,24 @@ export default function WhatIfSimulator() {
 
   const runSim = async () => {
     if (!borrowerId || !original) return
-    setSimulating(true)
+    setSimulating(true); setError('')
     try { setResult(await simulate(borrowerId, changes)) }
-    catch { /* ignore */ }
+    catch (err: any) { setError(err?.response?.data?.detail ?? 'Simulation failed. Please log in again and retry.') }
     finally { setSimulating(false) }
   }
 
-  const resetAll = () => { setChanges(defaults); setResult(null) }
+  const resetAll = () => { setChanges(defaults); setResult(null); setError('') }
   const hasChanges = SLIDERS.some(s => changes[s.key] !== 0)
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (inputId.trim()) setBorrowerId(inputId.trim().toUpperCase())
+    if (inputId.trim()) {
+      const nextId = inputId.trim().toUpperCase()
+      setBorrowerId(nextId)
+      setChanges(nextId === DEMO_BORROWER_ID ? DEMO_CHANGES : defaults)
+      setResult(null)
+      setError('')
+    }
   }
 
   return (
@@ -72,7 +82,7 @@ export default function WhatIfSimulator() {
       <form onSubmit={handleSearch} style={{ display:'flex', gap:8, marginBottom:20, maxWidth:380 }}>
         <div style={{ position:'relative', flex:1 }}>
           <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-          <input className="input-field" style={{ paddingLeft:32, fontSize:'0.82rem' }} placeholder="Borrower ID (e.g. MSME00042)" value={inputId} onChange={e=>setInputId(e.target.value)} />
+          <input className="input-field" style={{ paddingLeft:32, fontSize:'0.82rem' }} placeholder="Borrower ID (e.g. MSME00231)" value={inputId} onChange={e=>setInputId(e.target.value)} />
         </div>
         <button type="submit" className="btn-primary">Load</button>
       </form>
@@ -136,7 +146,7 @@ export default function WhatIfSimulator() {
                     </div>
                     <input
                       type="range" min={s.min} max={s.max} step={s.step} value={val}
-                      onChange={e => { setChanges(p => ({ ...p, [s.key]: parseFloat(e.target.value) })); setResult(null) }}
+                      onChange={e => { setChanges(p => ({ ...p, [s.key]: parseFloat(e.target.value) })); setResult(null); setError('') }}
                       style={{ width:'100%', background:`linear-gradient(to right, ${isDef?'rgba(255,255,255,0.12)':valColor} ${pct}%, rgba(255,255,255,0.07) ${pct}%)` }}
                     />
                   </div>
@@ -152,8 +162,8 @@ export default function WhatIfSimulator() {
                 style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}
               >
                 {simulating
-                  ? <><div style={{ width:14, height:14, border:'2px solid rgba(0,0,0,0.25)', borderTopColor:'#000', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} /> Simulating…</>
-                  : <><Zap size={14} /> Run Simulation</>
+                  ? <><div style={{ width:14, height:14, border:'2px solid rgba(0,0,0,0.25)', borderTopColor:'#000', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} /> Recalculating…</>
+                  : <><Zap size={14} /> Recalculate Stress</>
                 }
               </button>
               {!hasChanges && <div style={{ fontSize:'0.72rem', textAlign:'center', color:'var(--text-muted)', marginTop:6 }}>Adjust at least one parameter</div>}
@@ -181,6 +191,12 @@ export default function WhatIfSimulator() {
                 </div>
               </div>
             </div>
+
+            {error && (
+              <div className="glass-card" style={{ padding:14, border:'1px solid rgba(239,68,68,0.25)', background:'rgba(239,68,68,0.07)', color:'#fca5a5', fontSize:'0.78rem', lineHeight:1.45 }}>
+                {error}
+              </div>
+            )}
 
             {/* Simulated */}
             <AnimatePresence>
@@ -240,7 +256,7 @@ export default function WhatIfSimulator() {
             {!result && !simulating && (
               <div className="glass-card" style={{ padding:24, display:'flex', flexDirection:'column', alignItems:'center', gap:8, border:'1px dashed rgba(255,255,255,0.07)' }}>
                 <Zap size={20} style={{ color:'var(--text-muted)' }} />
-                <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', textAlign:'center' }}>Adjust parameters and run simulation</div>
+                <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', textAlign:'center' }}>Adjust parameters and recalculate stress</div>
               </div>
             )}
           </div>

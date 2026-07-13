@@ -55,10 +55,10 @@ export const Sidebar = () => {
           </div>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', 'Space Grotesk', serif", fontWeight: 700, color: '#f5f5f4', fontSize: '1.1rem', lineHeight: 1, letterSpacing: '0.02em' }}>
-              KAVACH
+              Sentinel
             </div>
             <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: 3, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 500 }}>
-              IDBI Early Warning
+              Early Warning System
             </div>
           </div>
         </div>
@@ -127,7 +127,7 @@ export const Sidebar = () => {
             </div>
           </div>
           <div style={{ fontFamily: 'JetBrains Mono,monospace', fontWeight: 700, fontSize: '0.75rem', color: 'var(--accent-gold)' }}>v1.0.0</div>
-          <div style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 2 }}>AUC-ROC 0.7294</div>
+          <div style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 2 }}>AUC-ROC 0.743</div>
         </div>
 
         {/* Sign out */}
