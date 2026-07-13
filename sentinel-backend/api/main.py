@@ -103,7 +103,7 @@ app = FastAPI(
 
 allowed_origins_str = os.environ.get(
     "SENTINEL_ALLOWED_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,https://kavach-gules.vercel.app"
 )
 allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
 

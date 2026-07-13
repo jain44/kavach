@@ -19,7 +19,7 @@ services:
       - key: KAVACH_SECRET_KEY
         generateValue: true
       - key: SENTINEL_ALLOWED_ORIGINS
-        value: https://kavach-frontend.vercel.app,https://kavach.vercel.app
+        value: https://kavach-gules.vercel.app,https://kavach-frontend.vercel.app,https://kavach.vercel.app,http://localhost:5173,http://localhost:3000
       - key: PYTHON_VERSION
         value: "3.11"
 
