@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, RefreshCw, AlertTriangle, TrendingUp,
@@ -11,6 +11,7 @@ import { motion } from 'framer-motion'
 
 const LOAN_TYPES = ['All', 'Working Capital', 'Term Loan', 'Trade Finance']
 const GRADE_ORDER = ['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'C', 'D']
+const GRADE_RANK: Record<string, number> = { AAA:0, AA:1, A:2, BBB:3, BB:4, B:5, C:6, D:7 }
 
 export default function PortfolioHeatmap() {
   const navigate = useNavigate()
@@ -24,6 +25,7 @@ export default function PortfolioHeatmap() {
   const [region, setRegion]     = useState('All')
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'worsened' | 'improved'>('all')
   const [sortMode, setSortMode] = useState<'stress_desc' | 'stress_asc' | 'grade' | 'pd_desc'>('grade')
+  const [isPending, startTransition] = useTransition()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -38,25 +40,25 @@ export default function PortfolioHeatmap() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const GRADE_RANK: Record<string,number> = { AAA:0, AA:1, A:2, BBB:3, BB:4, B:5, C:6, D:7 }
-
-  const accounts: any[] = (data?.accounts ?? []).filter((a: any) =>
-    (!search ||
-      a.borrower_id.toLowerCase().includes(search.toLowerCase()) ||
-      (a.business_name ?? '').toLowerCase().includes(search.toLowerCase())) &&
-    (industry === 'All' || a.industry === industry) &&
-    (region === 'All' || a.region === region) &&
-    (deltaFilter === 'all' ||
-      (deltaFilter === 'worsened' && (a.stress_score_delta ?? 0) > 0) ||
-      (deltaFilter === 'improved' && (a.stress_score_delta ?? 0) < 0))
-  ).sort((a: any, b: any) => {
-    if (sortMode === 'stress_desc') return b.stress_score - a.stress_score
-    if (sortMode === 'stress_asc')  return a.stress_score - b.stress_score
-    if (sortMode === 'pd_desc')     return b.pd_probability - a.pd_probability
-    // 'grade' — sort by grade ascending (AAA first), then stress descending within grade
-    const gd = (GRADE_RANK[a.risk_grade] ?? 9) - (GRADE_RANK[b.risk_grade] ?? 9)
-    return gd !== 0 ? gd : b.stress_score - a.stress_score
-  })
+  const accounts = useMemo(() => {
+    const searchLower = search.toLowerCase()
+    return (data?.accounts ?? []).filter((a: any) =>
+      (!searchLower ||
+        a.borrower_id.toLowerCase().includes(searchLower) ||
+        (a.business_name ?? '').toLowerCase().includes(searchLower)) &&
+      (industry === 'All' || a.industry === industry) &&
+      (region === 'All' || a.region === region) &&
+      (deltaFilter === 'all' ||
+        (deltaFilter === 'worsened' && (a.stress_score_delta ?? 0) > 0) ||
+        (deltaFilter === 'improved' && (a.stress_score_delta ?? 0) < 0))
+    ).sort((a: any, b: any) => {
+      if (sortMode === 'stress_desc') return b.stress_score - a.stress_score
+      if (sortMode === 'stress_asc')  return a.stress_score - b.stress_score
+      if (sortMode === 'pd_desc')     return b.pd_probability - a.pd_probability
+      const gd = (GRADE_RANK[a.risk_grade] ?? 9) - (GRADE_RANK[b.risk_grade] ?? 9)
+      return gd !== 0 ? gd : b.stress_score - a.stress_score
+    })
+  }, [data, search, industry, region, deltaFilter, sortMode])
 
   const gradeDist   = data?.grade_distribution ?? []
   const totalAccounts = data?.total_accounts ?? 0
@@ -176,7 +178,7 @@ export default function PortfolioHeatmap() {
         {/* Loan type pills */}
         <div style={{ display:'flex', gap:6 }}>
           {LOAN_TYPES.map(lt => (
-            <button key={lt} onClick={() => setLoanType(lt)} className={`filter-pill ${loanType===lt?'active':''}`}>
+            <button key={lt} onClick={() => startTransition(() => setLoanType(lt))} className={`filter-pill ${loanType===lt?'active':''}`}>
               {lt}
             </button>
           ))}
@@ -185,7 +187,7 @@ export default function PortfolioHeatmap() {
         {/* Industry Filter Dropdown */}
         <select
           value={industry}
-          onChange={e => setIndustry(e.target.value)}
+          onChange={e => startTransition(() => setIndustry(e.target.value))}
           style={{
             fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
             background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
@@ -201,7 +203,7 @@ export default function PortfolioHeatmap() {
         {/* Region Filter Dropdown */}
         <select
           value={region}
-          onChange={e => setRegion(e.target.value)}
+          onChange={e => startTransition(() => setRegion(e.target.value))}
           style={{
             fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
             background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
@@ -217,7 +219,7 @@ export default function PortfolioHeatmap() {
         {/* Sort Dropdown */}
         <select
           value={sortMode}
-          onChange={e => setSortMode(e.target.value as any)}
+          onChange={e => startTransition(() => setSortMode(e.target.value as any))}
           style={{
             fontSize: '0.8rem', padding: '6px 24px 6px 12px', height: '34px',
             background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
@@ -235,7 +237,7 @@ export default function PortfolioHeatmap() {
 
         {/* MoM Delta Toggle */}
         <button
-          onClick={() => setDeltaFilter(p => p === 'worsened' ? 'all' : 'worsened')}
+          onClick={() => startTransition(() => setDeltaFilter(p => p === 'worsened' ? 'all' : 'worsened'))}
           className={`filter-pill ${deltaFilter==='worsened'?'active':''}`}
           style={{ display:'flex', alignItems:'center', gap:5 }}
         >
@@ -270,6 +272,7 @@ export default function PortfolioHeatmap() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────── */}
+      <div style={{ opacity: isPending ? 0.6 : 1, transition: 'opacity 0.15s' }}>
       {loading ? (
         <div className="glass-card" style={{ padding:40 }}><PageLoader /></div>
       ) : viewMode==='table' ? (
@@ -277,6 +280,7 @@ export default function PortfolioHeatmap() {
       ) : (
         <GridView accounts={accounts} onSelect={id => navigate(`/account?id=${id}`)} />
       )}
+      </div>
     </div>
   )
 }
@@ -302,7 +306,7 @@ function TableView({ accounts, onSelect, getDelta }: { accounts:any[]; onSelect:
             </tr>
           </thead>
           <tbody>
-            {accounts.slice(0,200).map((acc:any) => {
+            {accounts.slice(0, 100).map((acc:any) => {
               const gradeColor = gradeToColor(acc.risk_grade)
               return (
                 <tr key={acc.borrower_id} onClick={() => onSelect(acc.borrower_id)}>
@@ -358,9 +362,9 @@ function TableView({ accounts, onSelect, getDelta }: { accounts:any[]; onSelect:
             })}
           </tbody>
         </table>
-        {accounts.length > 200 && (
+        {accounts.length > 100 && (
           <div style={{ padding:'10px 16px', textAlign:'center', fontSize:'0.78rem', color:'var(--text-muted)', borderTop:'1px solid var(--border-subtle)' }}>
-            Showing 200 of {accounts.length} — use filters to narrow down
+            Showing 100 of {accounts.length} — use filters to narrow down
           </div>
         )}
       </div>
